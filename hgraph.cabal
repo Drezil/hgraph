@@ -1,0 +1,24 @@
+name: hgraph
+version: 0.0.1
+cabal-version: >=1.2
+build-type: Simple
+license: AllRightsReserved
+license-file: ""
+description:  
+data-dir: ""
+ 
+executable hgraph
+    build-depends: QuickCheck -any, Stream -any, base -any,
+                   bytestring -any, ghc -any, monad-par -any, parallel -any
+    main-is: Main.hs
+    buildable: True
+    hs-source-dirs: src
+ 
+test-suite test-hgraph
+    build-depends: QuickCheck -any, Stream -any, base -any,
+                   bytestring -any, ghc -any, monad-par -any, parallel -any
+    type: exitcode-stdio-1.0
+    main-is: Main.hs
+    buildable: True
+    cpp-options: -DMAIN_FUNCTION=testMain
+    hs-source-dirs: src
