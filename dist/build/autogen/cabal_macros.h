@@ -63,3 +63,10 @@
   (major1) == 3 && (major2) <  2 || \
   (major1) == 3 && (major2) == 2 && (minor) <= 0)
 
+/* package text-0.11.3.1 */
+#define VERSION_text "0.11.3.1"
+#define MIN_VERSION_text(major1,major2,minor) (\
+  (major1) <  0 || \
+  (major1) == 0 && (major2) <  11 || \
+  (major1) == 0 && (major2) == 11 && (minor) <= 3)
+

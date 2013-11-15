@@ -24,12 +24,14 @@ import Data.List
 import System.Exit (exitFailure)
 import System.Environment
 import Test.QuickCheck.All (quickCheckAll)
-import qualified Data.ByteString.Lazy.Char8 as B
+import qualified Data.ByteString.Char8 as B
 import Data.ByteString.Lazy.Char8 (ByteString)
 import Control.Monad.Par.Scheds.Trace
 import qualified Data.Stream as S
 import Data.Either (lefts, rights)
 import Debug.Trace
+import qualified Data.Text as T
+import Data.Text.Encoding
 import qualified Data.Array.Accelerate as A
 -- change to Data.Array.Accelerate.CUDA as I and link accelerate-cuda to use GPU instead of CPU
 import Data.Array.Accelerate.Interpreter as I
@@ -38,19 +40,20 @@ import Stream hiding (map)
 
 type Matrix e = A.Array A.DIM2 e
 
-createGraph :: String -> Either [Int] String
-createGraph input = traceEvent "creating graph" createGraph' input (Left [])
+createGraph :: T.Text -> Either [Int] T.Text
+createGraph input = createGraph' input (Left [])
     where
-        createGraph' :: String -> Either [Int] String -> Either [Int] String
-        createGraph' [] r     = traceEvent "recursion done." r
-        createGraph' (a:as) r =
-                    let next = (createGraph' as r) in
+        createGraph' :: T.Text -> Either [Int] T.Text -> Either [Int] T.Text
+        createGraph' a r
+            | T.null a = r
+            | otherwise =
+                    let next = (createGraph' (T.tail a) r) in
                         case next of
                             Left xs ->
-                                case a of
+                                case T.head a of
                                     '0' -> Left $ 0:xs
                                     '1' -> Left $ 1:xs
-                                    _   -> Right $ "cannot parse " ++ (a:as)
+                                    _   -> Right $ T.append (T.pack "cannot parse ") a
                             Right errstr ->
                                 Right errstr
 --createGraph input = Right $ "Parsing-error in line: " ++ input
@@ -80,19 +83,17 @@ graphFolder l = graphFolder' l (Left [[]])
 concatWith :: String -> String -> String -> String
 concatWith d a b = a ++ d ++ b
 
-emptyLine :: String -> Bool
-emptyLine "" = True
-emptyLine "\n" = True
-emptyLine "\r\n" = True
-emptyLine "\r" = True
-emptyLine _ = False
+emptyLine :: T.Text -> Bool
+emptyLine a
+    | T.null a    = True
+    | otherwise   = False
 
-emptyLog :: [String] -> Bool
+emptyLog :: [T.Text] -> Bool
 emptyLog [] = True
-emptyLog a = emptyLine $ foldl1 (++) a
+emptyLog a = False --emptyLine $ foldl True (&&) (map emptyLine a)
 
 -- TODO: implement calculation
-doCalculation :: Matrix Int -> ByteString
+doCalculation :: Matrix Int -> B.ByteString
 doCalculation a = B.pack $ "" --(show a) ++ "\n"
 
 
@@ -108,10 +109,10 @@ exeMain = do
                                                         -- and filter empty lines
                                         (createGraph) (filter (not . emptyLine)
                                                         -- split at \n, convert to String
-                                                        (map B.unpack (B.split '\n' input)))
+                                                        (T.lines (decodeUtf8 input)))
     --egraph <- return $ graphFolder unrefined_graph
     (graph, log, lines) <- return $ ((foldl1 (++) (lefts unrefined_graph), -- concatenated graph
-                                foldl (concatWith "\n") "" (rights unrefined_graph), -- concat error-log
+                                T.intercalate (T.singleton '\n') (rights unrefined_graph), -- concat error-log
                                 length unrefined_graph) -- number of elements in graph
                                                     -- in parallel
                                                     `using` parTuple3 rdeepseq rdeepseq rdeepseq)
@@ -119,13 +120,14 @@ exeMain = do
     -- validate graph
     log <- return $ let l = length graph in
                         if l /= lines*lines then
-                            log ++ "Lines dont match up. Read " ++ (show l) ++ " lines. Expected "
-                                ++ (show (lines*lines)) ++ " lines.\n"
+                            T.append log $ T.pack $ "Lines dont match up. Read " ++ (show l) ++
+                                                    " chars. Expected " ++ (show (lines*lines)) ++
+                                                    " chars.\n"
                         else
                             log
     output <- return $ case emptyLine log of
         True -> doCalculation $ A.fromList (A.Z A.:. lines A.:. lines) graph
-        _    -> B.pack $ "Error detected:\n" ++ log ++ "\n\n"
+        _    -> encodeUtf8 $ T.append (T.append (T.pack "Error detected:\n") log) (T.pack "\n\n")
     B.putStr output
 
 

@@ -10,7 +10,7 @@ data-dir: ""
 executable hgraph
     build-depends: QuickCheck -any, Stream -any, accelerate -any,
                    base -any, bytestring -any, deepseq -any, ghc -any, monad-par -any,
-                   parallel -any
+                   parallel -any, text -any
     main-is: Main.hs
     buildable: True
     hs-source-dirs: src
@@ -19,7 +19,7 @@ executable hgraph
 test-suite test-hgraph
     build-depends: QuickCheck -any, Stream -any, accelerate -any,
                    base -any, bytestring -any, deepseq -any, ghc -any, monad-par -any,
-                   parallel -any
+                   parallel -any, text -any
     type: exitcode-stdio-1.0
     main-is: Main.hs
     buildable: True
