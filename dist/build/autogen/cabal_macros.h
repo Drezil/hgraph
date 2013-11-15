@@ -14,6 +14,13 @@
   (major1) == 0 && (major2) <  4 || \
   (major1) == 0 && (major2) == 4 && (minor) <= 6)
 
+/* package accelerate-0.13.0.5 */
+#define VERSION_accelerate "0.13.0.5"
+#define MIN_VERSION_accelerate(major1,major2,minor) (\
+  (major1) <  0 || \
+  (major1) == 0 && (major2) <  13 || \
+  (major1) == 0 && (major2) == 13 && (minor) <= 0)
+
 /* package base-4.6.0.1 */
 #define VERSION_base "4.6.0.1"
 #define MIN_VERSION_base(major1,major2,minor) (\
@@ -27,6 +34,13 @@
   (major1) <  0 || \
   (major1) == 0 && (major2) <  10 || \
   (major1) == 0 && (major2) == 10 && (minor) <= 0)
+
+/* package deepseq-1.3.0.1 */
+#define VERSION_deepseq "1.3.0.1"
+#define MIN_VERSION_deepseq(major1,major2,minor) (\
+  (major1) <  1 || \
+  (major1) == 1 && (major2) <  3 || \
+  (major1) == 1 && (major2) == 3 && (minor) <= 0)
 
 /* package ghc-7.6.3 */
 #define VERSION_ghc "7.6.3"

@@ -8,16 +8,18 @@ description:
 data-dir: ""
  
 executable hgraph
-    build-depends: QuickCheck -any, Stream -any, base -any,
-                   bytestring -any, ghc -any, monad-par -any, parallel -any
+    build-depends: QuickCheck -any, Stream -any, accelerate -any,
+                   base -any, bytestring -any, deepseq -any, ghc -any, monad-par -any,
+                   parallel -any
     main-is: Main.hs
     buildable: True
     hs-source-dirs: src
     ghc-options: -threaded -rtsopts -eventlog
  
 test-suite test-hgraph
-    build-depends: QuickCheck -any, Stream -any, base -any,
-                   bytestring -any, ghc -any, monad-par -any, parallel -any
+    build-depends: QuickCheck -any, Stream -any, accelerate -any,
+                   base -any, bytestring -any, deepseq -any, ghc -any, monad-par -any,
+                   parallel -any
     type: exitcode-stdio-1.0
     main-is: Main.hs
     buildable: True

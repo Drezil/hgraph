@@ -19,6 +19,7 @@ module Main (
 
 import Control.Monad (unless)
 import Control.Parallel.Strategies
+import Control.DeepSeq
 import Data.List
 import System.Exit (exitFailure)
 import System.Environment
@@ -28,16 +29,20 @@ import Data.ByteString.Lazy.Char8 (ByteString)
 import Control.Monad.Par.Scheds.Trace
 import qualified Data.Stream as S
 import Data.Either (lefts, rights)
+import Debug.Trace
+import qualified Data.Array.Accelerate as A
+-- change to Data.Array.Accelerate.CUDA as I and link accelerate-cuda to use GPU instead of CPU
+import Data.Array.Accelerate.Interpreter as I
 
 import Stream hiding (map)
 
+type Matrix e = A.Array A.DIM2 e
 
--- TODO: implement parser!
 createGraph :: String -> Either [Int] String
-createGraph input = createGraph' input (Left [])
+createGraph input = traceEvent "creating graph" createGraph' input (Left [])
     where
         createGraph' :: String -> Either [Int] String -> Either [Int] String
-        createGraph' [] r     = r
+        createGraph' [] r     = traceEvent "recursion done." r
         createGraph' (a:as) r =
                     let next = (createGraph' as r) in
                         case next of
@@ -87,8 +92,10 @@ emptyLog [] = True
 emptyLog a = emptyLine $ foldl1 (++) a
 
 -- TODO: implement calculation
-doCalculation :: [[Int]] -> ByteString
-doCalculation a = B.pack $ (show a) ++ "\n"
+doCalculation :: Matrix Int -> ByteString
+doCalculation a = B.pack $ "" --(show a) ++ "\n"
+
+
 
 exeMain = do
     args <- getArgs
@@ -103,10 +110,22 @@ exeMain = do
                                                         -- split at \n, convert to String
                                                         (map B.unpack (B.split '\n' input)))
     --egraph <- return $ graphFolder unrefined_graph
-    (graph, log) <- return (lefts unrefined_graph, rights unrefined_graph)
-    output <- return $ case emptyLog log of
-        True -> doCalculation graph
-        _    -> B.pack $ "Error detected:\n" ++ (foldl (concatWith "\n") "" log) ++ "\n\n"
+    (graph, log, lines) <- return $ ((foldl1 (++) (lefts unrefined_graph), -- concatenated graph
+                                foldl (concatWith "\n") "" (rights unrefined_graph), -- concat error-log
+                                length unrefined_graph) -- number of elements in graph
+                                                    -- in parallel
+                                                    `using` parTuple3 rdeepseq rdeepseq rdeepseq)
+
+    -- validate graph
+    log <- return $ let l = length graph in
+                        if l /= lines*lines then
+                            log ++ "Lines dont match up. Read " ++ (show l) ++ " lines. Expected "
+                                ++ (show (lines*lines)) ++ " lines.\n"
+                        else
+                            log
+    output <- return $ case emptyLine log of
+        True -> doCalculation $ A.fromList (A.Z A.:. lines A.:. lines) graph
+        _    -> B.pack $ "Error detected:\n" ++ log ++ "\n\n"
     B.putStr output
 
 
