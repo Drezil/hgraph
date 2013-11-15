@@ -32,13 +32,13 @@ import Data.Either (lefts, rights)
 import Debug.Trace
 import qualified Data.Text as T
 import Data.Text.Encoding
+import Stream hiding (map)
 import qualified Data.Array.Accelerate as A
 -- change to Data.Array.Accelerate.CUDA as I and link accelerate-cuda to use GPU instead of CPU
 import Data.Array.Accelerate.Interpreter as I
-
-import Stream hiding (map)
-
 type Matrix e = A.Array A.DIM2 e
+
+
 
 createGraph :: T.Text -> Either [Int] T.Text
 createGraph input = createGraph' input (Left [])
