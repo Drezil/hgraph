@@ -25,7 +25,7 @@ import System.Exit (exitFailure)
 import System.Environment
 import Test.QuickCheck.All (quickCheckAll)
 import qualified Data.ByteString.Char8 as B
-import Data.ByteString.Lazy.Char8 (ByteString)
+import Data.ByteString.Char8 (ByteString)
 import Control.Monad.Par.Scheds.Trace
 import qualified Data.Stream as S
 import Data.Either (lefts, rights)
@@ -39,7 +39,8 @@ import Data.Array.Accelerate.Interpreter as I
 type Matrix e = A.Array A.DIM2 e
 
 
-
+-- TODO: Give createGraph a presized Array and no dynamic [Int].
+-- should be createGraph :: T.Text -> Either (Matrix Int) T.Text
 createGraph :: T.Text -> Either [Int] T.Text
 createGraph input = createGraph' input (Left [])
     where
@@ -50,38 +51,16 @@ createGraph input = createGraph' input (Left [])
                     let next = (createGraph' (T.tail a) r) in
                         case next of
                             Left xs ->
-                                case T.head a of
-                                    '0' -> Left $ 0:xs
-                                    '1' -> Left $ 1:xs
+                                case T.head (traceEvent "parsing" a) of
+                                    '0' -> Left $ traceEvent "parse-concat" 0:xs
+                                    '1' -> Left $ traceEvent "parse-concat" 1:xs
                                     _   -> Right $ T.append (T.pack "cannot parse ") a
                             Right errstr ->
                                 Right errstr
 --createGraph input = Right $ "Parsing-error in line: " ++ input
 
--- TODO: not needed anymore. remove? Later use?
-graphFolder :: [Either [Int] String] -> (Either [[Int]] String)
-graphFolder [] = Right "empty Graph"
-graphFolder l = graphFolder' l (Left [[]])
-    where
-    graphFolder' :: [Either [Int] String] -> (Either [[Int]] String) -> (Either [[Int]] String)
-    graphFolder' [] r      = r
-    graphFolder' (a:as) r  =
-                    case a of
-                    -- we have an intact [Int]
-                    Left b ->
-                        case graphFolder' as r of
-                        -- append if rest is ok.
-                        Left xs  -> Left (b:xs)
-                        -- ooops. Error-String -> Discard result
-                        Right s -> Right s
-                    -- we have an Error-String -> ignore results, append errors if possible
-                    Right s ->
-                        case graphFolder' as r of
-                        Left x   -> Right s
-                        Right ss -> Right (ss ++ "\n" ++ s)
-
-concatWith :: String -> String -> String -> String
-concatWith d a b = a ++ d ++ b
+--concatWith :: String -> String -> String -> String
+--concatWith d a b = a ++ d ++ b
 
 emptyLine :: T.Text -> Bool
 emptyLine a
@@ -93,10 +72,13 @@ emptyLog [] = True
 emptyLog a = False --emptyLine $ foldl True (&&) (map emptyLine a)
 
 -- TODO: implement calculation
-doCalculation :: Matrix Int -> B.ByteString
-doCalculation a = B.pack $ "" --(show a) ++ "\n"
+--doCalculation :: Matrix Int -> B.ByteString
+doCalculation a = B.pack $ (show a) ++ "\n"
 
+infixl 1 +||
 
+(+||) :: a -> Strategy a -> a
+a +|| b = a `using` b
 
 exeMain = do
     args <- getArgs
@@ -104,29 +86,32 @@ exeMain = do
             ["-"] -> B.getContents
             [] -> error "Error: No filename or stdinput (-) given."
             [file] -> B.readFile file
+    -- read file and clean
+    readFile <- return $ filter (not . emptyLine) (T.lines (decodeUtf8 input))
+    inputLines <- return $ length readFile
+    -- TODO: concat with foldl1' kills us later -> use presized/preallocated array so we
+    --       dont copy that much lateron. Best would be Matrix Int
     -- unrefined_graph::[Either [Int] String] - [Int] is Adjacency-Line, String is parse-Error
-    unrefined_graph <- return $ parMap (rparWith rdeepseq) --run parallel, evaluate fully
-                                                        -- and filter empty lines
-                                        (createGraph) (filter (not . emptyLine)
-                                                        -- split at \n, convert to String
-                                                        (T.lines (decodeUtf8 input)))
+    unrefined_graph <- return $ (map (traceEvent "mapping" . createGraph) readFile)
+                                        +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
     --egraph <- return $ graphFolder unrefined_graph
-    (graph, log, lines) <- return $ ((foldl1 (++) (lefts unrefined_graph), -- concatenated graph
-                                T.intercalate (T.singleton '\n') (rights unrefined_graph), -- concat error-log
-                                length unrefined_graph) -- number of elements in graph
+
+    (graph, log, lines) <- return $ ((foldl1' ((traceEvent "concatenating graph") . (++)) (lefts unrefined_graph), -- concatenated graph
+                                traceEvent "concatenating log" T.intercalate (T.singleton '\n') (rights unrefined_graph), -- concat error-log
+                                traceEvent "getting length" length unrefined_graph) -- number of elements in graph
                                                     -- in parallel
                                                     `using` parTuple3 rdeepseq rdeepseq rdeepseq)
 
     -- validate graph
-    log <- return $ let l = length graph in
+    log <- return $ let l = traceEvent "first validation" length graph in
                         if l /= lines*lines then
                             T.append log $ T.pack $ "Lines dont match up. Read " ++ (show l) ++
                                                     " chars. Expected " ++ (show (lines*lines)) ++
                                                     " chars.\n"
                         else
                             log
-    output <- return $ case emptyLine log of
-        True -> doCalculation $ A.fromList (A.Z A.:. lines A.:. lines) graph
+    output <- return $ case emptyLine (traceEvent "last validation" log) of
+        True -> doCalculation $ graph --A.fromList (A.Z A.:. lines A.:. lines) graph
         _    -> encodeUtf8 $ T.append (T.append (T.pack "Error detected:\n") log) (T.pack "\n\n")
     B.putStr output
 
