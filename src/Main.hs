@@ -35,12 +35,14 @@ import Data.Text.Encoding
 import Stream hiding (map)
 import qualified Data.Array.Accelerate as A
 -- change to Data.Array.Accelerate.CUDA as I and link accelerate-cuda to use GPU instead of CPU
+-- depends on accelerate-cuda package in cabal, which needs the installed CUDA-stuff form
+-- nVidia (nvcc, header-files, ...) and the propriatary driver
 import Data.Array.Accelerate.Interpreter as I
 type Matrix e = A.Array A.DIM2 e
 
 
 -- TODO: Give createGraph a presized Array and no dynamic [Int].
--- should be createGraph :: T.Text -> Either (Matrix Int) T.Text
+-- should be createGraph :: T.Text -> Either (Vector Int) T.Text
 createGraph :: T.Text -> Either [Int] T.Text
 createGraph input = createGraph' input (Left [])
     where
@@ -57,10 +59,6 @@ createGraph input = createGraph' input (Left [])
                                     _   -> Right $ T.append (T.pack "cannot parse ") a
                             Right errstr ->
                                 Right errstr
---createGraph input = Right $ "Parsing-error in line: " ++ input
-
---concatWith :: String -> String -> String -> String
---concatWith d a b = a ++ d ++ b
 
 emptyLine :: T.Text -> Bool
 emptyLine a
