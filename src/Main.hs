@@ -101,6 +101,22 @@ emptyLog a = False --emptyLine $ foldl True (&&) (map emptyLine a)
 --doCalculation :: Matrix Int -> B.ByteString
 doCalculation a = B.pack $ (show a) ++ "\n"
 
+
+createOutput :: [[Int]] -> B.ByteString
+createOutput a = encodeUtf8 (createOutput' a)
+
+createOutput' :: [[Int]] -> T.Text
+createOutput' [a] = T.intercalate (T.singleton ',') (map (T.pack . show) a)
+createOutput' (a:as) = T.append
+                                    (T.append
+                                            (T.intercalate (T.singleton ',')
+                                            (map (T.pack . show) a))
+                                     (T.singleton '\n'))
+                               (createOutput' as)
+
+
+showHelp = undefined
+
 infixl 1 +||
 
 (+||) :: a -> Strategy a -> a
@@ -109,16 +125,19 @@ a +|| b = a `using` b
 exeMain = do
     args <- getArgs
     input <- case args of
-            ["-"] -> B.getContents
+            ["--help"] -> showHelp
+            ["-h"] -> showHelp
             [] -> error "Error: No filename or stdinput (-) given."
-            [file] -> B.readFile file
+            [adj, attr] -> Prelude.mapM B.readFile [adj, attr]
+            _ -> error "Wrong arguments given"
     -- read file and clean
-    readFile <- return $ filter (not . emptyLine) (T.lines (decodeUtf8 input))
-    inputLines <- return $ length readFile
+    adjMat <- return $ filter (not . emptyLine) (T.lines (decodeUtf8 (head input)))
+
+    inputLines <- return $ length adjMat
     -- TODO: concat with foldl1' kills us later -> use presized/preallocated array so we
     --       dont copy that much lateron. Best would be Matrix Int
     -- unrefined_graph::[Either [Int] String] - [Int] is Adjacency-Line, String is parse-Error
-    unrefined_graph <- return $ (map (traceEvent "mapping" . createGraph) readFile)
+    unrefined_graph <- return $ (map (traceEvent "mapping" . createGraph) adjMat)
                                         +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
     --egraph <- return $ graphFolder unrefined_graph
 
@@ -126,7 +145,7 @@ exeMain = do
                                 traceEvent "concatenating log" T.intercalate (T.singleton '\n') (rights unrefined_graph), -- concat error-log
                                 traceEvent "getting length" length unrefined_graph) -- number of elements in graph
                                                     -- in parallel
-                                                    `using` parTuple3 rdeepseq rdeepseq rdeepseq)
+                                                    `using` parTuple3 rseq rseq rseq)
 
     -- validate graph
     log <- return $ let l = traceEvent "first validation" length graph in
