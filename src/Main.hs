@@ -40,6 +40,34 @@ import qualified Data.Array.Accelerate as A
 import Data.Array.Accelerate.Interpreter as I
 type Matrix e = A.Array A.DIM2 e
 
+type Attr  = Matrix A.Int8
+-- Graph consists of a Vector denoting which colums of the matrix represents wich originating
+-- column in the global adjencency-matrix
+type Graph = (A.Vector A.Int8, Matrix A.Int8)
+-- Adjecency-Matrix
+type Adj   = Matrix A.Int8
+-- Vector of the Adjecency-Matrix
+type AdjV  = A.Vector A.Int8
+
+expand :: [Graph]-> Adj -> Attr ->[Graph]
+expand g a att = undefined
+
+-- constraint gets a Graph and an Attribute-Matrix and yields true, if the Graph still fulfills
+-- all constraints defined via the Attribute-Matrix.
+constraint :: Graph -> Attr -> Bool
+constraint g a = undefined
+
+
+-- addPoint gets a graph and a tuple of an adjecancy-Vector with an int wich column of the
+-- Adjacency-Matrix the Vector should represent to generate further Graphs
+addPoint :: Graph -> (Adj, Int) -> [Graph]
+addPoint g (a, n) = undefined
+
+
+-- addablePoints yields all valid addititonsto a Graph
+addablePoints :: Adj -> Graph-> [(Adj, Int)]
+addablePoints a g = undefined
+
 
 -- TODO: Give createGraph a presized Array and no dynamic [Int].
 -- should be createGraph :: T.Text -> Either (Vector Int) T.Text
