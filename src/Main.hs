@@ -42,8 +42,11 @@ type Matrix e = A.Array A.DIM2 e
 
 type Attr  = Matrix A.Int8
 -- Graph consists of a Vector denoting which colums of the matrix represents wich originating
--- column in the global adjencency-matrix
-type Graph = (A.Vector A.Int8, Matrix A.Int8)
+-- column in the global adjencency-matrix, the reduces adjencency-matrix of the graph, a
+-- matrix of constraints and a scalar denoting the density
+newtype Constraints = Matrix A.Float
+type Density = A.Scalar A.Float
+type Graph = (A.Vector A.Int8, Matrix A.Int8, Constraints, Density)
 -- Adjecency-Matrix
 type Adj   = Matrix A.Int8
 -- Vector of the Adjecency-Matrix
