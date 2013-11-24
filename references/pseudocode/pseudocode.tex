@@ -1,0 +1,103 @@
+\documentclass[11pt,a4paper]{scrartcl}
+\usepackage[ngerman]{babel} % Deutsches Wörterbuch usw.
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{times} % Skalierbarer und lesbarer Zeichensatz
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[usenames,dvipsnames]{xcolor}
+\inputencoding{utf8} % Wir wollen UTF8(=keine Probleme mit Umlauten etc.)
+\parindent0em % Keine amerikanische Einrückung am Anfang von Paragraphen
+\usepackage[lmargin=2cm,rmargin=3.5cm,tmargin=2cm,bmargin=2cm]{geometry}
+\parindent0em
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+%opening
+\fancyhf{}
+\fancyhead[L]{\textbf{Message Passing Programming\\Parallele Algorithmen und Datenverarbeitung}}
+\fancyhead[R]{\textbf{Stefan Dresselhaus\\Thomas Pajenkamp}}
+\fancyfoot[C]{\thepage}
+\fancyfoot[R]{24. November 2013}
+
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+
+\newcommand{\abs}[1]{\ensuremath{\left\lvert#1\right\rvert}}
+\newcommand{\norm}[1]{\ensuremath{\left\lVert#1\right\rVert}}
+\newcommand{\mean}[1]{\ensuremath{\overline{#1}}}
+\newcommand{\transp}[1]{\ensuremath{#1^{\mathsf{T}}}}
+
+% Ende der Voreinstellungen
+\begin{document}
+
+%\title{Message Passing Programming}
+%\author{Stefan Dresselhaus \and Thomas Pajenkamp}
+%\date{24. November 2013}
+%\maketitle
+
+\section*{Heuristik für \glqq{}Densely-connected Biclustering\grqq{}}
+
+\begin{algorithm*}
+\caption{Densely-connected Biclustering}
+\begin{algorithmic}[1]
+\Function{testHomogenity}{$A$, $\omega$, $\delta$, $g$}
+ \State $l \gets (\transp{A})_{g_0}$, $l \gets u$
+ \ForAll {nodes $i$ from $g \setminus \lbrace g_0\rbrace$}
+   \ForAll {dimensions $d$ of attribute matrix $A$}
+     \State $l \gets \min\lbrace l_d, A_{id}\rbrace$, $u \gets \max\lbrace l_d, A_{id}\rbrace$
+   \EndFor
+ \EndFor
+ \State $c \gets 0$
+ \ForAll {dimensions $d$ of attribute matrix $A$}
+    \If {$\abs{u_d - l_d} \leq \omega_d $}
+      \State $c \gets c+1$
+      \If {$c \geq \delta$}
+        \State \Return {true}
+      \EndIf
+    \EndIf
+ \EndFor
+ \Return {false}
+\EndFunction
+\end{algorithmic}
+\begin{algorithmic}[1]
+\Function{preprocessGraph}{$M$, $A$, $\omega$, $\delta$}
+ \State $G \gets \emptyset$
+ \ForAll {rows $i$ of adjascency matrix $M$}
+   \ForAll {columns $j$ of adjascency matrix $M$}
+     \If {$M_{ij} = 1$}
+       \If {\Call{testHomogenity}{$A$, $\omega$, $\delta$, $\lbrace i , j\rbrace$}}
+         \State $G \gets G \cup \lbrace \lbrace i, j\rbrace \rbrace$
+       \Else
+         \State $M_{ij} = 0$, $M_{ji} = 0$
+       \EndIf
+     \EndIf
+   \EndFor
+ \EndFor
+ \Return {$G$}
+\EndFunction
+\end{algorithmic}
+\begin{algorithmic}[1]
+\Function{DCB}{$M$, $A$, $\alpha$, $\omega$, $\delta$}
+ \State $G \gets $ \Call{preprocessGraph}{$M$, $A$, $\omega$, $\delta$}
+ \State $F \gets \emptyset$
+ \While {$G \neq \emptyset$}
+   \State $G' \gets G$, $G \gets \emptyset$
+   \ForAll {node sets $g$ in $G'$}
+     \State $b \gets \text{true}$
+     \ForAll {connected nodes $h$ with $h > \max g$}
+       \State $\hat{g} \gets g \cup \lbrace h\rbrace$
+       \If {\Call{testHomogenity}{$A$, $\omega$, $\delta$, $\hat{g}$} $\wedge$ \Call{graphDensity}{$M$, $\hat{g}$} $\leq$ $\alpha$}
+         \State $G \gets G \cup \lbrace \hat{g} \rbrace$
+         \State $b \gets \text{false}$
+       \EndIf
+     \EndFor
+     \If {$b$}
+       \State $F \gets F \cup \lbrace g\rbrace$
+     \EndIf
+   \EndFor
+ \EndWhile
+\EndFunction
+\end{algorithmic}
+\end{algorithm*}
+
+\end{document}

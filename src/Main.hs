@@ -32,7 +32,7 @@ import Data.Either (lefts, rights)
 import Debug.Trace
 import qualified Data.Text as T
 import Data.Text.Encoding
-import Stream hiding (map)
+--import Stream hiding (map) --same as Data.Stream imported above?
 import qualified Data.Array.Accelerate as A
 -- change to Data.Array.Accelerate.CUDA as I and link accelerate-cuda to use GPU instead of CPU
 -- depends on accelerate-cuda package in cabal, which needs the installed CUDA-stuff form
@@ -41,16 +41,17 @@ import Data.Array.Accelerate.Interpreter as I
 type Matrix e = A.Array A.DIM2 e
 
 type Attr  = Matrix A.Int8
--- Graph consists of a Vector denoting which colums of the matrix represents wich originating
--- column in the global adjencency-matrix, the reduces adjencency-matrix of the graph, a
--- matrix of constraints and a scalar denoting the density
-newtype Constraints = Matrix A.Float
-type Density = A.Scalar A.Float
-type Graph = (A.Vector A.Int8, Matrix A.Int8, Constraints, Density)
 -- Adjecency-Matrix
 type Adj   = Matrix A.Int8
 -- Vector of the Adjecency-Matrix
 type AdjV  = A.Vector A.Int8
+newtype Constraints = Matrix A.Float
+-- Graph consists of a Vector denoting which colums of the matrix represents wich originating
+-- column in the global adjencency-matrix, the reduces adjencency-matrix of the graph, a
+-- matrix of constraints and a scalar denoting the density
+type Density = A.Scalar A.Float
+type Graph = (A.Vector A.Int8, Adj, Constraints, Density)
+
 
 expand :: [Graph]-> Adj -> Attr ->[Graph]
 expand g a att = undefined
@@ -135,6 +136,7 @@ exeMain = do
             _ -> error "Wrong arguments given"
     -- read file and clean
     adjMat <- return $ filter (not . emptyLine) (T.lines (decodeUtf8 (head input)))
+    attrMat <- return $ filter (not . emptyLine) (T.lines (decodeUtf8 ((head . tail) input)))
 
     inputLines <- return $ length adjMat
     -- TODO: concat with foldl1' kills us later -> use presized/preallocated array so we
