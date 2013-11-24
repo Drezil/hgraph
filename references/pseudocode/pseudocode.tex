@@ -62,8 +62,8 @@
 \begin{algorithmic}[1]
 \Function{preprocessGraph}{$M$, $A$, $\omega$, $\delta$}
  \State $G \gets \emptyset$
- \ForAll {rows $i$ of adjascency matrix $M$}
-   \ForAll {columns $j$ of adjascency matrix $M$}
+ \ForAll {rows $i$ of adjacency matrix $M$}
+   \ForAll {columns $j$ of adjacency matrix $M$}
      \If {$M_{ij} = 1$}
        \If {\Call{testHomogenity}{$A$, $\omega$, $\delta$, $\lbrace i , j\rbrace$}}
          \State $G \gets G \cup \lbrace \lbrace i, j\rbrace \rbrace$
@@ -96,6 +96,7 @@
      \EndIf
    \EndFor
  \EndWhile
+ \State \Return $F$
 \EndFunction
 \end{algorithmic}
 \end{algorithm*}
