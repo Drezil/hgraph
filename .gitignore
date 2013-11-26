@@ -1,4 +1,5 @@
 *.o
 *~
 dist/setup-config
+*.hi
 

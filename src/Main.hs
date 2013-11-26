@@ -20,7 +20,7 @@ module Main (
 import Control.Monad (unless)
 import Control.Parallel.Strategies
 import Control.DeepSeq
-import Data.List
+import qualified Data.List as L
 import System.Exit (exitFailure)
 import System.Environment
 import Test.QuickCheck.All (quickCheckAll)
@@ -32,43 +32,50 @@ import Data.Either (lefts, rights)
 import Debug.Trace
 import qualified Data.Text as T
 import Data.Text.Encoding
-import Stream hiding (map)
-import qualified Data.Array.Accelerate as A
+--import Stream hiding (map) --same as Data.Stream imported above?
+import Data.Array.Accelerate hiding (not)
 -- change to Data.Array.Accelerate.CUDA as I and link accelerate-cuda to use GPU instead of CPU
 -- depends on accelerate-cuda package in cabal, which needs the installed CUDA-stuff form
 -- nVidia (nvcc, header-files, ...) and the propriatary driver
 import Data.Array.Accelerate.Interpreter as I
-type Matrix e = A.Array A.DIM2 e
+type Matrix e = Array DIM2 e
 
-type Attr  = Matrix A.Int8
+type Attr  = Matrix Int8
+-- Adjecency-Matrix
+type Adj   = Matrix Int8
+-- Vector of the Adjecency-Matrix
+type AdjV  = Vector Int8
+newtype Constraints = Matrix Float
 -- Graph consists of a Vector denoting which colums of the matrix represents wich originating
 -- column in the global adjencency-matrix, the reduces adjencency-matrix of the graph, a
 -- matrix of constraints and a scalar denoting the density
-newtype Constraints = Matrix A.Float
-type Density = A.Scalar A.Float
-type Graph = (A.Vector A.Int8, Matrix A.Int8, Constraints, Density)
--- Adjecency-Matrix
-type Adj   = Matrix A.Int8
--- Vector of the Adjecency-Matrix
-type AdjV  = A.Vector A.Int8
+type Density = Scalar Float
 
-expand :: [Graph]-> Adj -> Attr ->[Graph]
+-- Graph
+type Graph = (Vector Int8, Adj, Constraints, Density)
+
+-- Vector of Graphs
+type MultiGraph e = (Vector Int8, Array DIM3 e, Constraints, Density)
+
+
+
+expand :: Acc (MultiGraph Int8)-> Acc Adj -> Acc Attr -> Acc (MultiGraph Int8)
 expand g a att = undefined
 
 -- constraint gets a Graph and an Attribute-Matrix and yields true, if the Graph still fulfills
 -- all constraints defined via the Attribute-Matrix.
-constraint :: Graph -> Attr -> Bool
+constraint :: Acc Graph -> Acc Attr -> Acc (Scalar Bool)
 constraint g a = undefined
 
 
 -- addPoint gets a graph and a tuple of an adjecancy-Vector with an int wich column of the
 -- Adjacency-Matrix the Vector should represent to generate further Graphs
-addPoint :: Graph -> (Adj, Int) -> [Graph]
-addPoint g (a, n) = undefined
+addPoint :: Acc Graph -> Acc (Adj, (Scalar Int)) -> Acc (MultiGraph Int8)
+addPoint g a = undefined
 
 
 -- addablePoints yields all valid addititonsto a Graph
-addablePoints :: Adj -> Graph-> [(Adj, Int)]
+addablePoints :: Acc Adj -> Acc Graph-> Acc (Vector Int8)
 addablePoints a g = undefined
 
 
@@ -109,11 +116,11 @@ createOutput :: [[Int]] -> B.ByteString
 createOutput a = encodeUtf8 (createOutput' a)
 
 createOutput' :: [[Int]] -> T.Text
-createOutput' [a] = T.intercalate (T.singleton ',') (map (T.pack . show) a)
+createOutput' [a] = T.intercalate (T.singleton ',') (L.map (T.pack . show) a)
 createOutput' (a:as) = T.append
                                     (T.append
                                             (T.intercalate (T.singleton ',')
-                                            (map (T.pack . show) a))
+                                            (L.map (T.pack . show) a))
                                      (T.singleton '\n'))
                                (createOutput' as)
 
@@ -134,17 +141,18 @@ exeMain = do
             [adj, attr] -> Prelude.mapM B.readFile [adj, attr]
             _ -> error "Wrong arguments given"
     -- read file and clean
-    adjMat <- return $ filter (not . emptyLine) (T.lines (decodeUtf8 (head input)))
+    adjMat <- return $ L.filter (not . emptyLine) (T.lines (decodeUtf8 (head input)))
+    attrMat <- return $ L.filter (not . emptyLine) (T.lines (decodeUtf8 ((head . L.tail) input)))
 
     inputLines <- return $ length adjMat
     -- TODO: concat with foldl1' kills us later -> use presized/preallocated array so we
     --       dont copy that much lateron. Best would be Matrix Int
     -- unrefined_graph::[Either [Int] String] - [Int] is Adjacency-Line, String is parse-Error
-    unrefined_graph <- return $ (map (traceEvent "mapping" . createGraph) adjMat)
+    unrefined_graph <- return $ (L.map (traceEvent "mapping" . createGraph) adjMat)
                                         +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
     --egraph <- return $ graphFolder unrefined_graph
 
-    (graph, log, lines) <- return $ ((foldl1' ((traceEvent "concatenating graph") . (++)) (lefts unrefined_graph), -- concatenated graph
+    (graph, log, lines) <- return $ ((L.foldl1' ((traceEvent "concatenating graph") . (++)) (lefts unrefined_graph), -- concatenated graph
                                 traceEvent "concatenating log" T.intercalate (T.singleton '\n') (rights unrefined_graph), -- concat error-log
                                 traceEvent "getting length" length unrefined_graph) -- number of elements in graph
                                                     -- in parallel
