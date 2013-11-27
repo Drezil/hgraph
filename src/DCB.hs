@@ -14,9 +14,12 @@
 
 module DCB where
 
+import Prelude hiding (Int, Double, Float)
+import qualified Prelude (Int, Double, Float)
+
 --import Stream hiding (map) --same as Data.Stream imported above?
-import Data.Array.Accelerate (Z(..), DIM0, DIM1, DIM2, DIM3, Scalar, Vector, (:.)(..), Array,(!),
-    Int8, Int, Float, Double, Acc, Exp, Elt)
+import Data.Array.Accelerate (Z(..),DIM0,DIM1,DIM2,DIM3,Scalar,Vector,(:.)(..),Array,(!),(!!),
+    Int8,Int,Float,Double,Acc,Exp,Elt,(>->),(>*),(<*),(>=*),(<=*),(==*),(/=*),(?),(?|),(&&*),(||*))
 import qualified Data.Array.Accelerate as A
 -- change to Data.Array.Accelerate.CUDA as I and link accelerate-cuda to use GPU instead of CPU
 -- depends on accelerate-cuda package in cabal, which needs the installed CUDA-stuff form
@@ -45,26 +48,57 @@ type MultiGraph e = (Vector Int, Array DIM3 e, Constraints, Density)
 preprocess :: Acc (Matrix Int8) -> Acc Attr -> Acc (MultiGraph Int8)
 preprocess adj a = undefined
 
-{--
-createConstrMat :: Acc Attr -> Acc (Vector Int) -> Acc (Vector double) -> Acc (Matrix Double)
+-- tests whether the minimum amount of attributes are within range
+-- first argument: required attributes to be in range
+-- second argument: constraints vector with 1/0 entries for single attributes
+testConstraints :: Acc (Scalar Int) -> Acc (Vector Int8) -> Exp Bool
+testConstraints minHits = A.the . A.map (\s -> A.the minHits >=* A.fromIntegral s) . A.fold1All (+)
+
+createConstrMat :: Acc Attr -> Acc (Vector Double) -> Acc (Vector Int)
+        -> Acc ((Matrix Double), (Vector Int8))
 createConstrMat attr maxDist nodes =
     let
-        (Z:._:.nAttr) = arrayShape attr
-    in generate (Z:.nAttr:.3) (initConsrMat attr nodes) >-> {-- calculate first column --}
---}
+        (Z:._:.nAttr) = A.unlift (A.shape attr) :: ((:.) ((:.) Z (Exp Int)) (Exp Int))
+        constrMat = A.generate (A.index2 nAttr 3) (genConstrMat)
+        -- generator function for the constraints fulfillment matrix
+        -- first column contains minimum and second column maximum value of the attributes
+        genConstrMat :: Exp DIM2 -> Exp Double
+        genConstrMat ix =
+            let
+                (Z:.idAttr:.col) = A.unlift ix :: ((:.) ((:.) Z (Exp Int)) (Exp Int))
+            in case col of
+                    0 -> A.the $A.minimum (A.map (\i -> attr!(A.index2 i idAttr)) nodes)
+                    1 -> A.the $A.maximum (A.map (\i -> attr!(A.index2 i idAttr)) nodes)
+        -- tests whether an attribute is within the accepted threshold
+        testDist :: Exp Int -> Exp Double -> Exp Int8
+        testDist ix d = abs d <* maxDist!(A.index1 ix) ? (1, 0)
+    in A.lift (constrMat, (A.fold1 ((-):: Exp Double -> Exp Double -> Exp Double)
+            >-> A.zipWith testDist (A.enumFromN (A.index1 nAttr) 0)) constrMat)
+            --subtract values >-> combine with vector of indices and test distance
+            --TODO improvable by permute/backpermute?
 
--- generate function for initialising the constraints matrix of a subgraph
--- first column contains minimum value of each attribute, second column contains maximum value
--- zeroth column contains 0 after initialisation (should contain 1 if constraints are fulfilled
--- afterwards)
-initConstrMat :: Acc Attr -> Acc (Vector Int) -> Exp DIM2 -> Exp Double
-initConstrMat attr nodes ix =
+--creates the new constraints fulfillment matrix when adding a new node to a known graph
+updateConstrMatrix :: Acc Attr -> Acc (Vector Double) -> Acc (Scalar Int)
+        -> Acc (Matrix Double, Vector Int8) -> Acc ((Matrix Double), (Vector Int8))
+updateConstrMatrix attr maxDist node constr =
     let
-        (Z:.idAttr:.col) = A.unlift ix :: ((:.) ((:.) Z (Exp Int)) (Exp Int))
-    in case col of
-            1 -> A.the $A.minimum (A.map (\i -> attr!(A.index2 i idAttr)) nodes)
-            2 -> A.the $A.maximum (A.map (\i -> attr!(A.index2 i idAttr)) nodes)
-            _ -> 0.0
+        (Z:._:.nAttr) = A.unlift (A.shape attr) :: ((:.) ((:.) Z (Exp Int)) (Exp Int))
+        (minmax, fulfill) = A.unlift constr :: (Acc (Matrix Double), Acc (Vector Int8))
+        newConstr = A.generate (A.shape attr) genUpConstrMat
+        genUpConstrMat :: Exp DIM2 -> Exp Double
+        genUpConstrMat ix =
+            let
+                (Z:.idAttr:.col) = A.unlift ix :: ((:.) ((:.) Z (Exp Int)) (Exp Int))
+            in case col of
+                    0 -> A.min (attr!(A.index2 (A.the node) idAttr)) (minmax!(A.index2 idAttr 0))
+                    1 -> A.max (attr!(A.index2 (A.the node) idAttr)) (minmax!(A.index2 idAttr 1))
+        testUpDist :: Exp Int -> Exp Double -> Exp Int8
+        testUpDist ix d =
+            let
+                dIx = A.index1 ix
+            in fulfill!dIx ==* 1 &&* abs d <* maxDist!dIx ? (1, 0)
+    in A.lift (newConstr, (A.fold1 ((-):: Exp Double -> Exp Double -> Exp Double)
+            >-> A.zipWith testUpDist (A.enumFromN (A.index1 nAttr) 0)) newConstr)
 
 expand :: Acc (MultiGraph Int8)-> Acc Adj -> Acc Attr -> Acc (MultiGraph Int8)
 expand g a att = undefined
