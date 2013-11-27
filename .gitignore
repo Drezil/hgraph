@@ -1,6 +1,5 @@
 *.o
 *~
-dist/*
 *.hi
 *.eventlog
 *.lkshf

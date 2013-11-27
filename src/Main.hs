@@ -40,12 +40,12 @@ import Data.Array.Accelerate hiding (not,(++))
 import Data.Array.Accelerate.Interpreter as I
 type Matrix e = Array DIM2 e
 
-type Attr  = Matrix Int8
+type Attr  = Matrix Double
 -- Adjecency-Matrix
 type Adj   = Matrix Int8
 -- Vector of the Adjecency-Matrix
 type AdjV  = Vector Int8
-newtype Constraints = Matrix Float
+newtype Constraints = Matrix Double
 -- Graph consists of a Vector denoting which colums of the matrix represents wich originating
 -- column in the global adjencency-matrix, the reduces adjencency-matrix of the graph, a
 -- matrix of constraints and a scalar denoting the density
