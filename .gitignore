@@ -5,4 +5,5 @@
 *.lkshf
 
 /.dist-buildwrapper
+dist/setup-config
 .project*
