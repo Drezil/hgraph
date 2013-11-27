@@ -33,7 +33,7 @@ import Debug.Trace
 import qualified Data.Text as T
 import Data.Text.Encoding
 --import Stream hiding (map) --same as Data.Stream imported above?
-import Data.Array.Accelerate hiding (not)
+import Data.Array.Accelerate hiding (not,(++))
 -- change to Data.Array.Accelerate.CUDA as I and link accelerate-cuda to use GPU instead of CPU
 -- depends on accelerate-cuda package in cabal, which needs the installed CUDA-stuff form
 -- nVidia (nvcc, header-files, ...) and the propriatary driver
@@ -88,15 +88,29 @@ createGraph input = createGraph' input (Left [])
         createGraph' a r
             | T.null a = r
             | otherwise =
-                    let next = (createGraph' (T.tail a) r) in
+                    let next = (createGraph' (T.tail a) r) in        -- flip cases for less function-calls?
                         case next of
                             Left xs ->
-                                case T.head (traceEvent "parsing" a) of
-                                    '0' -> Left $ traceEvent "parse-concat" 0:xs
-                                    '1' -> Left $ traceEvent "parse-concat" 1:xs
+                                case T.head a of
+                                    '0' -> Left $ 0:xs
+                                    '1' -> Left $ 1:xs
                                     _   -> Right $ T.append (T.pack "cannot parse ") a
                             Right errstr ->
                                 Right errstr
+
+createAttr :: T.Text -> Either [Double] T.Text
+createAttr input = createAttr' (T.split (=='\t') input) (Left [])
+    where
+        createAttr' :: [T.Text] -> Either [Double] T.Text -> Either [Double] T.Text
+        createAttr' (a:as) r =
+                    let this = read (T.unpack a) :: Double in
+                        case isNaN this of
+                            True -> Right $ T.append (T.pack "cannot parse ") a
+                            _ ->
+                                let next = (createAttr' as r) in
+                                  case next of
+                                    Left rs -> Left (this:rs)
+                                    _ -> next
 
 emptyLine :: T.Text -> Bool
 emptyLine a
@@ -109,7 +123,7 @@ emptyLog a = False --emptyLine $ foldl True (&&) (map emptyLine a)
 
 -- TODO: implement calculation
 --doCalculation :: Matrix Int -> B.ByteString
-doCalculation a = B.pack $ (show a) ++ "\n"
+doCalculation a = B.pack $ ""--(show a) ++ "\n"
 
 
 createOutput :: [[Int]] -> B.ByteString
@@ -124,6 +138,7 @@ createOutput' (a:as) = T.append
                                      (T.singleton '\n'))
                                (createOutput' as)
 
+-- preprocess ::
 
 showHelp = undefined
 
@@ -144,29 +159,42 @@ exeMain = do
     adjMat <- return $ L.filter (not . emptyLine) (T.lines (decodeUtf8 (head input)))
     attrMat <- return $ L.filter (not . emptyLine) (T.lines (decodeUtf8 ((head . L.tail) input)))
 
-    inputLines <- return $ length adjMat
+    adjLines <- return $ length adjMat
+    attrLines <- return $ length attrMat
     -- TODO: concat with foldl1' kills us later -> use presized/preallocated array so we
     --       dont copy that much lateron. Best would be Matrix Int
     -- unrefined_graph::[Either [Int] String] - [Int] is Adjacency-Line, String is parse-Error
-    unrefined_graph <- return $ (L.map (traceEvent "mapping" . createGraph) adjMat)
+    unrefined_graph <- return $ (L.map (createGraph) adjMat)
+                                        +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
+    unrefined_attr <- return $ (L.map (createAttr) attrMat)
                                         +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
     --egraph <- return $ graphFolder unrefined_graph
 
-    (graph, log, lines) <- return $ ((L.foldl1' ((traceEvent "concatenating graph") . (++)) (lefts unrefined_graph), -- concatenated graph
-                                traceEvent "concatenating log" T.intercalate (T.singleton '\n') (rights unrefined_graph), -- concat error-log
-                                traceEvent "getting length" length unrefined_graph) -- number of elements in graph
+    (graph, log, lines) <- return $ ((L.foldl1' (++) (lefts unrefined_graph), -- concatenated graph
+                                T.intercalate (T.singleton '\n') (rights unrefined_graph), -- concat error-log
+                                length unrefined_graph) -- number of elements in graph
                                                     -- in parallel
-                                                    `using` parTuple3 rseq rseq rseq)
+                                                    `using` parTuple3 rdeepseq rdeepseq rseq)
+
+    (attr, log, linesAttr) <- return $ ((L.foldl1' (++) (lefts unrefined_graph), -- concatenated graph
+                                T.append log (T.intercalate (T.singleton '\n') (rights unrefined_graph)), -- concat error-log
+                                length unrefined_graph) -- number of elements in graph
+                                                    -- in parallel
+                                                    `using` parTuple3 rdeepseq rdeepseq rseq)
 
     -- validate graph
-    log <- return $ let l = traceEvent "first validation" length graph in
+    log <- return $ let l = length graph in
                         if l /= lines*lines then
                             T.append log $ T.pack $ "Lines dont match up. Read " ++ (show l) ++
                                                     " chars. Expected " ++ (show (lines*lines)) ++
                                                     " chars.\n"
+                        else if adjLines /= attrLines then
+                            T.append log $ T.pack $ "Adjecency-Matrix size "++ (show adjLines) ++
+                                                    " differs from Attribute-Matrix " ++ (show attrLines) ++
+                                                    ".\n"
                         else
                             log
-    output <- return $ case emptyLine (traceEvent "last validation" log) of
+    output <- return $ case emptyLine log of
         True -> doCalculation $ graph --A.fromList (A.Z A.:. lines A.:. lines) graph
         _    -> encodeUtf8 $ T.append (T.append (T.pack "Error detected:\n") log) (T.pack "\n\n")
     B.putStr output
