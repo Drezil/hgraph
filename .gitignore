@@ -4,3 +4,5 @@
 *.eventlog
 *.lkshf
 
+/.dist-buildwrapper
+.project*

@@ -61,13 +61,13 @@ createAttr input = createAttr' (T.split (=='\t') input) (Left [])
         createAttr' :: [T.Text] -> Either [Double] T.Text -> Either [Double] T.Text
         createAttr' (a:as) r =
                     let this = read (T.unpack a) :: Double in
-                        case isNaN this of
-                            True -> Right $ T.append (T.pack "cannot parse ") a
-                            _ ->
-                                let next = (createAttr' as r) in
-                                  case next of
-                                    Left rs -> Left (this:rs)
-                                    _ -> next
+                        (if isNaN this then 
+                                Right $ T.append (T.pack "cannot parse ") a
+                         else
+                           (let next = (createAttr' as r) in
+                              case next of
+                                  Left rs -> Left (this : rs)
+                                  _ -> next))
 
 emptyLine :: T.Text -> Bool
 emptyLine a
@@ -105,13 +105,14 @@ infixl 1 +||
 a +|| b = a `using` b
 
 exeMain = do
-    args <- getArgs
-    input <- case args of
-            ["--help"] -> showHelp
-            ["-h"] -> showHelp
-            [] -> error "Error: No filename or stdinput (-) given."
-            [adj, attr] -> Prelude.mapM B.readFile [adj, attr]
-            _ -> error "Wrong arguments given"
+--    args <- getArgs
+--    input <- case args of
+--            ["--help"] -> showHelp
+--            ["-h"] -> showHelp
+--            [] -> error "Error: No filename or stdinput (-) given."
+--            [adj, attr] -> Prelude.mapM B.readFile [adj, attr]
+--            _ -> error "Wrong arguments given"
+    input <- Prelude.mapM B.readFile ["sampledata.adj","sampledata.adj.atr"]
     -- read file and clean
     adjMat <- return $ L.filter (not . emptyLine) (T.lines (decodeUtf8 (head input)))
     attrMat <- return $ L.filter (not . emptyLine) (T.lines (decodeUtf8 ((head . L.tail) input)))
