@@ -1,5 +1,5 @@
 *.o
 *~
-dist/setup-config
+dist/*
 *.hi
 
