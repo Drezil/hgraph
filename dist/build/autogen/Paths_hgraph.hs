@@ -7,8 +7,6 @@ module Paths_hgraph (
 import qualified Control.Exception as Exception
 import Data.Version (Version(..))
 import System.Environment (getEnv)
-import Prelude
-
 catchIO :: IO a -> (Exception.IOException -> IO a) -> IO a
 catchIO = Exception.catch
 
@@ -17,10 +15,10 @@ version :: Version
 version = Version {versionBranch = [0,0,1], versionTags = []}
 bindir, libdir, datadir, libexecdir :: FilePath
 
-bindir     = "/home/sdressel/.cabal/bin"
-libdir     = "/home/sdressel/.cabal/lib/hgraph-0.0.1/ghc-7.6.3"
-datadir    = "/home/sdressel/.cabal/share/hgraph-0.0.1"
-libexecdir = "/home/sdressel/.cabal/libexec"
+bindir     = "/homes/sdressel/.cabal/bin"
+libdir     = "/homes/sdressel/.cabal/lib/hgraph-0.0.1/ghc-7.4.1"
+datadir    = "/homes/sdressel/.cabal/share/hgraph-0.0.1"
+libexecdir = "/homes/sdressel/.cabal/libexec"
 
 getBinDir, getLibDir, getDataDir, getLibexecDir :: IO FilePath
 getBinDir = catchIO (getEnv "hgraph_bindir") (\_ -> return bindir)
