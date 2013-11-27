@@ -45,18 +45,25 @@ type MultiGraph e = (Vector Int, Array DIM3 e, Constraints, Density)
 preprocess :: Acc (Matrix Int8) -> Acc Attr -> Acc (MultiGraph Int8)
 preprocess adj a = undefined
 
+{--
+createConstrMat :: Acc Attr -> Acc (Vector Int) -> Acc (Vector double) -> Acc (Matrix Double)
+createConstrMat attr maxDist nodes =
+    let
+        (Z:._:.nAttr) = arrayShape attr
+    in generate (Z:.nAttr:.3) (initConsrMat attr nodes) >-> {-- calculate first column --}
+--}
+
 -- generate function for initialising the constraints matrix of a subgraph
 -- first column contains minimum value of each attribute, second column contains maximum value
 -- zeroth column contains 0 after initialisation (should contain 1 if constraints are fulfilled
 -- afterwards)
--- TODO: DIM2 input -> Exp DIM2
-genConstrMat :: Acc Attr -> Acc (Vector Int) -> DIM2 -> Exp Double
-genConstrMat attr nodes ix =
+initConstrMat :: Acc Attr -> Acc (Vector Int) -> Exp DIM2 -> Exp Double
+initConstrMat attr nodes ix =
     let
-        (Z:.idAttr:.col) = ix -- unlift ix :: ((:.) ((:.) Z Int) Int)
+        (Z:.idAttr:.col) = A.unlift ix :: ((:.) ((:.) Z (Exp Int)) (Exp Int))
     in case col of
-            1 -> A.the $A.minimum (A.map (\i -> attr!(A.index2 i $A.lift idAttr)) nodes)
-            2 -> A.the $A.maximum (A.map (\i -> attr!(A.index2 i $A.lift idAttr)) nodes)
+            1 -> A.the $A.minimum (A.map (\i -> attr!(A.index2 i idAttr)) nodes)
+            2 -> A.the $A.maximum (A.map (\i -> attr!(A.index2 i idAttr)) nodes)
             _ -> 0.0
 
 expand :: Acc (MultiGraph Int8)-> Acc Adj -> Acc Attr -> Acc (MultiGraph Int8)
