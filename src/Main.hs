@@ -85,19 +85,23 @@ emptyLog a = False --emptyLine $ foldl True (&&) (map emptyLine a)
 
 -- TODO: implement calculation
 --doCalculation :: Matrix Int -> B.ByteString
-doCalculation graph attr = createOutput graph
+doCalculation graph attr = createOutput attr
 
-
+--default output with "," within items and "\n" within dimensions
 createOutput :: (Unbox a, Show a) => Array U DIM2 a -> B.ByteString
-createOutput a = B.concat $ L.map B.pack (createOutput' (extent a) a)
+createOutput a = _createOutput a "," "\n"
 
-createOutput' :: (Unbox a, Show a) => DIM2 -> Array U DIM2 a -> [String]
-createOutput' shape@(Z :. si :. sj) a = [(createOutput'' shape i 0 a) ++ "\n" | i <- [0..(si - 1)]]
+--output Array a with "itt" within items and "lt" within dimensions
+_createOutput :: (Unbox a, Show a) => Array U DIM2 a -> String -> String -> B.ByteString
+_createOutput a itt lt = B.concat $ L.map B.pack (_createOutput' (extent a) a itt lt)
 
-createOutput'' :: (Unbox a, Show a) => DIM2 -> Int -> Int -> Array U DIM2 a -> String
-createOutput'' shape@(Z :. si :. sj) i j a 
+_createOutput' :: (Unbox a, Show a) => DIM2 -> Array U DIM2 a -> String -> String -> [String]
+_createOutput' shape@(Z :. si :. sj) a itt lt = [(_createOutput'' shape i 0 a itt) ++ lt | i <- [0..(si - 1)]]
+
+_createOutput'' :: (Unbox a, Show a) => DIM2 -> Int -> Int -> Array U DIM2 a -> String -> String
+_createOutput'' shape@(Z :. si :. sj) i j a itt
                         | sj-1 == j = show (a!(ix2 i j))  -- no "," for last one..
-                        | otherwise = show (a!(ix2 i j)) ++ "," ++ (createOutput'' shape i (j+1) a)    
+                        | otherwise = show (a!(ix2 i j)) ++ itt ++ (_createOutput'' shape i (j+1) a itt)    
                                    
 {-
 T.intercalate (T.singleton ',') (L.map (T.pack . show) a)
