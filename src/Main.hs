@@ -29,6 +29,7 @@ import           Data.Array.Repa.Repr.Unboxed
 import           Data.ByteString.Char8          (ByteString)
 import qualified Data.ByteString.Char8          as B
 import           Data.Either                    (lefts, rights)
+import           Data.Functor.Identity
 import qualified Data.List                      as L
 import qualified Data.Stream                    as S
 import qualified Data.Text                      as T
@@ -37,7 +38,6 @@ import           Debug.Trace
 import           System.Environment
 import           System.Exit                    (exitFailure)
 import           Test.QuickCheck.All            (quickCheckAll)
-import Data.Functor.Identity
 
 
 -- TODO: Give createGraph a presized Array and no dynamic [Int].
@@ -101,8 +101,8 @@ _createOutput' shape@(Z :. si :. sj) a itt lt = [(_createOutput'' shape i 0 a it
 _createOutput'' :: (Unbox a, Show a) => DIM2 -> Int -> Int -> Array U DIM2 a -> String -> String
 _createOutput'' shape@(Z :. si :. sj) i j a itt
                         | sj-1 == j = show (a!(ix2 i j))  -- no "," for last one..
-                        | otherwise = show (a!(ix2 i j)) ++ itt ++ (_createOutput'' shape i (j+1) a itt)    
-                                   
+                        | otherwise = show (a!(ix2 i j)) ++ itt ++ (_createOutput'' shape i (j+1) a itt)
+
 {-
 T.intercalate (T.singleton ',') (L.map (T.pack . show) a)
 createOutput' (a:as) = T.append
@@ -155,15 +155,15 @@ exeMain = do
                                       --  +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
     attrNum <- return $ getAttrLength (head unrefined_attr)
     putStrLn $ show (adjLines, attrLines, attrNum)
-    
+
     ----- CHECK FOR ERRORS
     -- print out any read-errors and abort
-    if adjLines /= attrLines then 
+    if adjLines /= attrLines then
         checkError $ T.pack $ "Adjacency-Matrix size "++ show adjLines ++
                               " differs from Attribute-Matrix " ++ show attrLines ++
                               ".\n"
     else
-        return ()    
+        return ()
     checkError $ T.intercalate (T.singleton '\n') (rights unrefined_graph)
     checkError $ T.intercalate (T.singleton '\n') (rights unrefined_attr)
 
@@ -172,7 +172,7 @@ exeMain = do
     graph <- return $ A.fromListUnboxed (Z :. adjLines :. adjLines) (L.foldl1' (++) (lefts unrefined_graph)) -- concatenated graph
 
     attr <- return $ A.fromListUnboxed (Z :. attrLines :. attrNum) (L.foldl1' (++) (lefts unrefined_attr)) -- concatenated attr
-    
+
     ----- CALCULATE
     output <- return $ doCalculation graph attr
     B.putStr output
