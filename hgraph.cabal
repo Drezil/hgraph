@@ -8,14 +8,25 @@ description:
 data-dir: ""
  
 executable hgraph
-    build-depends: QuickCheck -any, Stream -any, accelerate -any,
-                   base -any, bytestring -any, deepseq -any, ghc -any,
-                   monad-par >=0.3.4, parallel -any, repa >=3.2, text -any
+    build-depends: 
+                   QuickCheck -any,
+                   Stream -any,
+                   accelerate -any,
+                   base -any,
+                   bytestring -any,
+                   deepseq -any,
+                   ghc -any,
+                   monad-par >=0.3.4,
+                   parallel -any,
+                   repa >=3.2,
+                   text -any,
+                   transformers >=0.3.0
     main-is: Main.hs
     buildable: True
     hs-source-dirs: src
     other-modules: DCB DCB
     ghc-options: -threaded -rtsopts -eventlog
+    extensions:    DoAndIfThenElse
  
 test-suite test-hgraph
     build-depends: QuickCheck -any, Stream -any, accelerate -any,
