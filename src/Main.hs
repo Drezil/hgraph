@@ -1,4 +1,5 @@
-{-# LANGUAGE CPP, TemplateHaskell #-}
+{-# LANGUAGE CPP             #-}
+{-# LANGUAGE TemplateHaskell #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Main
@@ -17,23 +18,26 @@ module Main (
     main
 ) where
 
-import DCB
+import           DCB
 
-import Control.Monad (unless)
-import Control.Parallel.Strategies
-import Control.DeepSeq
-import qualified Data.List as L
-import System.Exit (exitFailure)
-import System.Environment
-import Test.QuickCheck.All (quickCheckAll)
-import qualified Data.ByteString.Char8 as B
-import Data.ByteString.Char8 (ByteString)
-import Control.Monad.Par.Scheds.Trace
-import qualified Data.Stream as S
-import Data.Either (lefts, rights)
-import Debug.Trace
-import qualified Data.Text as T
-import Data.Text.Encoding
+import           Control.DeepSeq
+import           Control.Monad                  (unless)
+import           Control.Monad.Par.Scheds.Trace
+import           Control.Parallel.Strategies
+import           Data.Array.Repa                as A hiding ((++))
+import           Data.Array.Repa.Repr.Unboxed
+import           Data.ByteString.Char8          (ByteString)
+import qualified Data.ByteString.Char8          as B
+import           Data.Either                    (lefts, rights)
+import qualified Data.List                      as L
+import qualified Data.Stream                    as S
+import qualified Data.Text                      as T
+import           Data.Text.Encoding
+import           Debug.Trace
+import           System.Environment
+import           System.Exit                    (exitFailure)
+import           Test.QuickCheck.All            (quickCheckAll)
+import Data.Functor.Identity
 
 
 -- TODO: Give createGraph a presized Array and no dynamic [Int].
@@ -59,9 +63,10 @@ createAttr :: T.Text -> Either [Double] T.Text
 createAttr input = createAttr' (T.split (=='\t') input) (Left [])
     where
         createAttr' :: [T.Text] -> Either [Double] T.Text -> Either [Double] T.Text
+        createAttr' [] r     = r
         createAttr' (a:as) r =
                     let this = read (T.unpack a) :: Double in
-                        (if isNaN this then 
+                        (if isNaN this then
                                 Right $ T.append (T.pack "cannot parse ") a
                          else
                            (let next = (createAttr' as r) in
@@ -80,22 +85,33 @@ emptyLog a = False --emptyLine $ foldl True (&&) (map emptyLine a)
 
 -- TODO: implement calculation
 --doCalculation :: Matrix Int -> B.ByteString
-doCalculation a = B.pack $ ""--(show a) ++ "\n"
+doCalculation graph attr = createOutput graph
 
 
-createOutput :: [[Int]] -> B.ByteString
-createOutput a = encodeUtf8 (createOutput' a)
+createOutput :: (Unbox a, Show a) => Array U DIM2 a -> B.ByteString
+createOutput a = B.concat $ L.map B.pack (createOutput' (extent a) a)
 
-createOutput' :: [[Int]] -> T.Text
-createOutput' [a] = T.intercalate (T.singleton ',') (L.map (T.pack . show) a)
+createOutput' :: (Unbox a, Show a) => DIM2 -> Array U DIM2 a -> [String]
+createOutput' shape@(Z :. si :. sj) a = [(createOutput'' shape i 0 a) ++ "\n" | i <- [0..(si - 1)]]
+
+createOutput'' :: (Unbox a, Show a) => DIM2 -> Int -> Int -> Array U DIM2 a -> String
+createOutput'' shape@(Z :. si :. sj) i j a 
+                        | sj-1 == j = show (a!(ix2 i j))  -- no "," for last one..
+                        | otherwise = show (a!(ix2 i j)) ++ "," ++ (createOutput'' shape i (j+1) a)    
+                                   
+{-
+T.intercalate (T.singleton ',') (L.map (T.pack . show) a)
 createOutput' (a:as) = T.append
                                     (T.append
                                             (T.intercalate (T.singleton ',')
                                             (L.map (T.pack . show) a))
                                      (T.singleton '\n'))
                                (createOutput' as)
+-}
 
--- preprocess ::
+getAttrLength :: Either [Double] T.Text -> Int
+getAttrLength (Left a) = length a
+getAttrLength (Right _) = 0
 
 showHelp = undefined
 
@@ -103,6 +119,13 @@ infixl 1 +||
 
 (+||) :: a -> Strategy a -> a
 a +|| b = a `using` b
+
+checkError :: T.Text -> IO ()
+checkError a
+        | T.null a  = return ()
+        | otherwise = do
+                        B.putStr $ encodeUtf8 $ T.append (T.append (T.pack "Error detected:\n") a) (T.pack "\n\n")
+                        exitFailure
 
 exeMain = do
 --    args <- getArgs
@@ -123,38 +146,31 @@ exeMain = do
     --       dont copy that much lateron. Best would be Matrix Int
     -- unrefined_graph::[Either [Int] String] - [Int] is Adjacency-Line, String is parse-Error
     unrefined_graph <- return $ (L.map (createGraph) adjMat)
-                                        +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
+                                      --  +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
     unrefined_attr <- return $ (L.map (createAttr) attrMat)
-                                        +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
-    --egraph <- return $ graphFolder unrefined_graph
+                                      --  +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
+    attrNum <- return $ getAttrLength (head unrefined_attr)
+    putStrLn $ show (adjLines, attrLines, attrNum)
+    
+    ----- CHECK FOR ERRORS
+    -- print out any read-errors and abort
+    if adjLines /= attrLines then 
+        checkError $ T.pack $ "Adjacency-Matrix size "++ show adjLines ++
+                              " differs from Attribute-Matrix " ++ show attrLines ++
+                              ".\n"
+    else
+        return ()    
+    checkError $ T.intercalate (T.singleton '\n') (rights unrefined_graph)
+    checkError $ T.intercalate (T.singleton '\n') (rights unrefined_attr)
 
-    (graph, log, lines) <- return $ ((L.foldl1' (++) (lefts unrefined_graph), -- concatenated graph
-                                T.intercalate (T.singleton '\n') (rights unrefined_graph), -- concat error-log
-                                length unrefined_graph) -- number of elements in graph
-                                                    -- in parallel
-                                                    `using` parTuple3 rdeepseq rdeepseq rseq)
+    putStrLn $ show (length (L.foldl1 (++) (lefts unrefined_graph)),length (L.foldl1 (++) (lefts unrefined_attr)))
+    ----- EXTRACT MATRICES
+    graph <- return $ A.fromListUnboxed (Z :. adjLines :. adjLines) (L.foldl1' (++) (lefts unrefined_graph)) -- concatenated graph
 
-    (attr, log, linesAttr) <- return $ ((L.foldl1' (++) (lefts unrefined_graph), -- concatenated graph
-                                T.append log (T.intercalate (T.singleton '\n') (rights unrefined_graph)), -- concat error-log
-                                length unrefined_graph) -- number of elements in graph
-                                                    -- in parallel
-                                                    `using` parTuple3 rdeepseq rdeepseq rseq)
-
-    -- validate graph
-    log <- return $ let l = length graph in
-                        if l /= lines*lines then
-                            T.append log $ T.pack $ "Lines dont match up. Read " ++ (show l) ++
-                                                    " chars. Expected " ++ (show (lines*lines)) ++
-                                                    " chars.\n"
-                        else if adjLines /= attrLines then
-                            T.append log $ T.pack $ "Adjecency-Matrix size "++ (show adjLines) ++
-                                                    " differs from Attribute-Matrix " ++ (show attrLines) ++
-                                                    ".\n"
-                        else
-                            log
-    output <- return $ case emptyLine log of
-        True -> doCalculation $ graph --A.fromList (A.Z A.:. lines A.:. lines) graph
-        _    -> encodeUtf8 $ T.append (T.append (T.pack "Error detected:\n") log) (T.pack "\n\n")
+    attr <- return $ A.fromListUnboxed (Z :. attrLines :. attrNum) (L.foldl1' (++) (lefts unrefined_attr)) -- concatenated attr
+    
+    ----- CALCULATE
+    output <- return $ doCalculation graph attr
     B.putStr output
 
 
