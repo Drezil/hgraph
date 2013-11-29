@@ -22,8 +22,8 @@ import qualified Prelude ((++))
 import           Data.Array.Repa (Array,(:.)(..),(!),(++),(+^),(-^),(*^),(/^))
 import qualified Data.Array.Repa as A
 import           Data.Array.Repa.Index
+import           Data.Either
 import           Data.Int
-import           Data.Maybe
 
 type Vector r e = Array r DIM1 e
 type Matrix r e = Array r DIM2 e
@@ -46,25 +46,37 @@ expand :: Adj -> Attr -> [Graph] ->  [Graph]
 expand adj attr g = undefined -- addablePoints -> for each: addPoint -> filterLayer
 
 
-preprocess :: Adj -> Attr -> Density -> MaxDivergence -> (Adj, Vector A.U Graph)
-preprocess adj attr d div = undefined
---    let
---        (Z:.nNodes:._) = A.extract adj
---        pairs = A.fromFunction (ix1 (((nNodes-1)*(nNodes-2)) / 2)) (\(Z:.i) -> (i % nNodes))
---        finalGraphs = foo
---
---    in (adj, A.computeS finalGraphs)
--- TODO for all pairs (i, j) with adj(i,j) != 0: if initGraph add, else discard and update adjacancy matrix
+preprocess :: Adj -> Attr -> Density -> MaxDivergence -> Int -> (Adj, [Graph])
+preprocess adj attr d div req =
+    let
+        (Z:.nNodes:._) = A.extent adj
+        results = map (initGraph attr div req) [(i, j) | i <- [0..nNodes], j <- [(i+1)..nNodes], adj!(ix2 i j) /= 0]
+        finalGraphs = lefts results
+        mask = A.fromListUnboxed (A.extent adj) $reverse $createMask [] 0 0 $rights results
+        createMask :: [Bool] -> Int -> Int -> [(Int, Int)] -> [Bool]
+        createMask acc i j tpl =
+            let
+                nextJ = j `mod` (nNodes-1)
+                nextI = if nextJ == 0 then i+1 else i
+                accV = case tpl of [] -> False; _ -> i == (fst $head tpl) && j == (snd $head tpl)
+                nextList = if accV then tail tpl else tpl
+            in case i > nNodes of
+                    True  -> acc
+                    False -> createMask (accV:acc) nextI nextJ nextList
+        -- TODO : nicht schön, da aus den Tupeln (i,j) auf hässliche Weise eine Matrix erzeugt wird,
+        --        die dann mit adj gefiltert wird. etwas schöner wäre es mit selectP statt fromFunction
+        adj' = A.computeS $A.fromFunction (A.extent adj) (\sh -> if mask!sh then 0 else adj!sh)
+    in (adj', finalGraphs)
 
 -- initGraph initializes a seed graph if it fulfills the constraints
 -- assumption: given nodes i, j are connected
-initGraph :: Attr -> MaxDivergence -> Int -> Int -> Int -> Maybe Graph
-initGraph attr div req i j =
+initGraph :: Attr -> MaxDivergence -> Int -> (Int, Int) -> Either Graph (Int, Int)
+initGraph attr div req (i, j) =
     let
        constr = constraintInit attr div req i j
     in case constr of
-            Nothing -> Nothing
-            Just c  -> Just (A.computeS $A.fromFunction (ix1 2)
+            Nothing -> Right (i, j)
+            Just c  -> Left $(A.computeS $A.fromFunction (ix1 2)
                     (\(Z:.i) -> if i == 0 then i else j), c, 1)
 
 -- constraintInit checks the contraints for an initializin seed
