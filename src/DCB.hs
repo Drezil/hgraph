@@ -44,7 +44,7 @@ expand adj attr g = undefined
 
 -- constraint gets a Graph and an Attribute-Matrix and yields true, if the Graph still fulfills
 -- all constraints defined via the Attribute-Matrix.
-constraint :: Adj -> Attr -> Graph -> Int -> Maybe Bool
+constraint :: Adj -> Attr -> Graph -> Int -> Maybe Constraints
 constraint adj attr g newNode = undefined
 
 
