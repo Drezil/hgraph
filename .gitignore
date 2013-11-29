@@ -8,3 +8,4 @@
 dist/setup-config
 .project*
 *autogen*
+dist/build/
