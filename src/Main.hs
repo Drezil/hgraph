@@ -36,7 +36,7 @@ import qualified Data.Text                      as T
 import           Data.Text.Encoding
 import           Debug.Trace
 import           System.Environment
-import           System.Exit                    (exitFailure)
+import           System.Exit                    (exitFailure, exitSuccess)
 import           Test.QuickCheck.All            (quickCheckAll)
 
 
@@ -87,9 +87,15 @@ emptyLog a = False --emptyLine $ foldl True (&&) (map emptyLine a)
 --doCalculation :: Matrix Int -> B.ByteString
 doCalculation graph attr = createOutput attr
 
+-- | creates a default-formatted output with "," in between elements
+--   and "\n" in between dimensions
+--   calls just _createOutput with preset properties
+
 --default output with "," within items and "\n" within dimensions
 createOutput :: (Unbox a, Show a) => Array U DIM2 a -> B.ByteString
 createOutput a = _createOutput a "," "\n"
+
+-- | creates a formatted output from a DIM2 repa-Array
 
 --output Array a with "itt" within items and "lt" within dimensions
 _createOutput :: (Unbox a, Show a) => Array U DIM2 a -> String -> String -> B.ByteString
@@ -103,27 +109,39 @@ _createOutput'' shape@(Z :. si :. sj) i j a itt
                         | sj-1 == j = show (a!(ix2 i j))  -- no "," for last one..
                         | otherwise = show (a!(ix2 i j)) ++ itt ++ (_createOutput'' shape i (j+1) a itt)
 
-{-
-T.intercalate (T.singleton ',') (L.map (T.pack . show) a)
-createOutput' (a:as) = T.append
-                                    (T.append
-                                            (T.intercalate (T.singleton ',')
-                                            (L.map (T.pack . show) a))
-                                     (T.singleton '\n'))
-                               (createOutput' as)
--}
 
-getAttrLength :: Either [Double] T.Text -> Int
-getAttrLength (Left a) = length a
-getAttrLength (Right _) = 0
+-- | gets the length of the Left a.
+--   0 if Left a empty or no valid constructor.
+getLength :: Either [a] T.Text -> Int
+getLength (Left a) = length a
+getLength (Right _) = 0
 
-showHelp = undefined
+
+-- | prints the Help and exits
+showHelp :: IO ()
+showHelp = do
+                putStrLn $ "Usage: hgraph <adjacency> <attribute>\n"++
+                           "\n" ++
+                           "-h         show help\n" ++
+                           "--help\n" ++
+                           "\n" ++
+                           "adjacency  An adjecency-Matrix with 0 or 1 as weights for edges\n"++
+                           "           seperated by newlines for each row.\n"++
+                           "           Must be NxN.\n"++
+                           "\n"++
+                           "attribute  A tabulator-seperated Matrix of attributes.\n" ++
+                           "           Must be Nxk.\n"++
+                           "\n"
+                exitSuccess
 
 infixl 1 +||
 
+-- | short for a `using` b. We don't need brackets this way and are able to comment out parallelism.
 (+||) :: a -> Strategy a -> a
 a +|| b = a `using` b
 
+
+-- | checks if the submitted Text is empty. If not it will be printed out and the program aborts
 checkError :: T.Text -> IO ()
 checkError a
         | T.null a  = return ()
@@ -131,12 +149,15 @@ checkError a
                         B.putStr $ encodeUtf8 $ T.append (T.append (T.pack "Error detected:\n") a) (T.pack "\n\n")
                         exitFailure
 
+--change Debug to return () lateron.
+debug a = putStrLn a
+
 exeMain = do
 --    args <- getArgs
 --    input <- case args of
 --            ["--help"] -> showHelp
 --            ["-h"] -> showHelp
---            [] -> error "Error: No filename or stdinput (-) given."
+--            [] -> error "Error: Wrong number of Arguments given. Try --help for more information."
 --            [adj, attr] -> Prelude.mapM B.readFile [adj, attr]
 --            _ -> error "Wrong arguments given"
     input <- Prelude.mapM B.readFile ["sampledata.adj","sampledata.adj.atr"]
@@ -146,36 +167,42 @@ exeMain = do
 
     adjLines <- return $ length adjMat
     attrLines <- return $ length attrMat
-    -- TODO: concat with foldl1' kills us later -> use presized/preallocated array so we
-    --       dont copy that much lateron. Best would be Matrix Int
-    -- unrefined_graph::[Either [Int] String] - [Int] is Adjacency-Line, String is parse-Error
+
     unrefined_graph <- return $ (L.map (createGraph) adjMat)
-                                      --  +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
+                                        +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
     unrefined_attr <- return $ (L.map (createAttr) attrMat)
-                                      --  +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
-    attrNum <- return $ getAttrLength (head unrefined_attr)
-    putStrLn $ show (adjLines, attrLines, attrNum)
+                                        +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
+    adjNum <- return $ getLength (head unrefined_graph)
+    attrNum <- return $ getLength (head unrefined_attr)
+    debug $ show (adjLines, attrLines, attrNum)
 
     ----- CHECK FOR ERRORS
-    -- print out any read-errors and abort
+    ---- print out any read-errors and abort
+    -- parser-errors
+    checkError $ T.intercalate (T.singleton '\n') (rights unrefined_graph)
+    checkError $ T.intercalate (T.singleton '\n') (rights unrefined_attr)
+    -- attribute-errors
     if adjLines /= attrLines then
         checkError $ T.pack $ "Adjacency-Matrix size "++ show adjLines ++
                               " differs from Attribute-Matrix " ++ show attrLines ++
                               ".\n"
     else
         return ()
-    checkError $ T.intercalate (T.singleton '\n') (rights unrefined_graph)
-    checkError $ T.intercalate (T.singleton '\n') (rights unrefined_attr)
+    if adjLines /= adjNum then
+        checkError $ T.pack $ "Adjacency-Matrix is not square.\n" ++
+                              "Read format is " ++ show adjNum ++
+                              "x" ++ show attrNum ++ ".\n"
+    else
+        return ()
 
-    putStrLn $ show (length (L.foldl1 (++) (lefts unrefined_graph)),length (L.foldl1 (++) (lefts unrefined_attr)))
     ----- EXTRACT MATRICES
-    graph <- return $ A.fromListUnboxed (Z :. adjLines :. adjLines) (L.foldl1' (++) (lefts unrefined_graph)) -- concatenated graph
+    graph <- return $ A.fromListUnboxed (Z :. adjLines :. adjLines) (L.foldl1 (++) (lefts unrefined_graph)) -- concatenated graph
 
-    attr <- return $ A.fromListUnboxed (Z :. attrLines :. attrNum) (L.foldl1' (++) (lefts unrefined_attr)) -- concatenated attr
+    attr <- return $ A.fromListUnboxed (Z :. attrLines :. attrNum) (L.foldl1 (++) (lefts unrefined_attr)) -- concatenated attr
 
-    ----- CALCULATE
-    output <- return $ doCalculation graph attr
-    B.putStr output
+    ----- CALCULATE & OUTPUT
+
+    B.putStr $ doCalculation graph attr
 
 
 -- Entry point for unit tests.

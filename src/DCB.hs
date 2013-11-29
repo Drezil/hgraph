@@ -14,16 +14,17 @@
 
 module DCB where
 
-import           Prelude hiding((++))
-import qualified Prelude ((++))
+import           Prelude               hiding ((++))
+import qualified Prelude               ((++))
 
 import           Control.Monad.Par
-import qualified Prelude ((++))
-import           Data.Array.Repa (Array,(:.)(..),(!),(++),(+^),(-^),(*^),(/^))
-import qualified Data.Array.Repa as A
+import           Data.Array.Repa       ((:.) (..), Array, (!), (*^), (++), (+^),
+                                        (-^), (/^))
+import qualified Data.Array.Repa       as A
 import           Data.Array.Repa.Index
 import           Data.Either
 import           Data.Int
+import qualified Prelude               ((++))
 
 type Vector r e = Array r DIM1 e
 type Matrix r e = Array r DIM2 e
