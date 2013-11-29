@@ -7,3 +7,4 @@
 /.dist-buildwrapper
 dist/setup-config
 .project*
+*autogen*
