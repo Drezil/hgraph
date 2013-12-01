@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE DoAndIfThenElse #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, BangPatterns #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Main
@@ -53,8 +53,9 @@ import           Test.QuickCheck.All            (quickCheckAll)
 --    * Valid Chars: 0, 1, \\n
 --
 --    * Invalid: \\r
+
 createGraph :: T.Text -> Either [Int8] T.Text
-createGraph input = createGraph' input (Left [])
+createGraph (!input) = createGraph' input (Left [])
     where
         createGraph' :: T.Text -> Either [Int8] T.Text -> Either [Int8] T.Text
         createGraph' a r
@@ -87,7 +88,7 @@ createGraph input = createGraph' input (Left [])
 
 --TODO: curruntly ignores first element
 createAttr :: T.Text -> Either [Double] T.Text
-createAttr input = createAttr' (tail (T.split (=='\t') input)) (Left [])
+createAttr (!input) = createAttr' (tail (T.split (=='\t') input)) (Left [])
     where
         createAttr' :: [T.Text] -> Either [Double] T.Text -> Either [Double] T.Text
         createAttr' [] r     = r
@@ -125,7 +126,9 @@ createOutput a = _createOutput a "," "\n"
 --
 --   * Second String is the between-dimensions-separator
 _createOutput :: (Unbox a, Show a) => Array U DIM2 a -> String -> String -> B.ByteString
-_createOutput a itt lt = B.concat $ L.map B.pack (_createOutput' (extent a) a itt lt)
+_createOutput a itt lt = B.concat $ 
+                                (B.pack $ "Matrix "++(show $ listOfShape $ extent a)++ "\n\n")
+                                : (L.map B.pack (_createOutput' (extent a) a itt lt))
         where
         _createOutput' :: (Unbox a, Show a) => DIM2 -> Array U DIM2 a -> String -> String -> [String]
         _createOutput' shape@(Z :. si :. sj) a itt lt = [(_createOutput'' shape i 0 a itt) ++ lt | i <- [0..(si - 1)]]
@@ -199,9 +202,9 @@ main = do
     attrLines <- return $ length attrMat
 
     unrefined_graph <- return $ (L.map (createGraph) adjMat)
-                                        +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
+                                        -- +|| (parBuffer 25 rseq) --run parallel, evaluate fully
     unrefined_attr <- return $ (L.map (createAttr) attrMat)
-                                        +|| (parBuffer 100 rdeepseq) --run parallel, evaluate fully
+                                        -- +|| (parBuffer 25 rseq) --run parallel, evaluate fully
     adjNum <- return $ getLength (head unrefined_graph)
     attrNum <- return $ getLength (head unrefined_attr)
     debug $ show (adjLines, attrLines, attrNum)
