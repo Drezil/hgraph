@@ -25,6 +25,7 @@ import           Control.Monad.Par.Scheds.Trace
 import           Control.Parallel.Strategies
 import           Data.Array.Repa                as A hiding ((++))
 import           Data.Array.Repa.Repr.Unboxed
+import           Data.Array.Repa.Eval           (Elt)
 import           Data.ByteString.Char8          (ByteString)
 import qualified Data.ByteString.Char8          as B
 import           Data.Char                      (isSpace)
@@ -54,10 +55,10 @@ import           Test.QuickCheck.All            (quickCheckAll)
 --
 --    * Invalid: \\r
 
-createGraph :: T.Text -> Either [Int8] T.Text
+createGraph :: (Elt a, Integral a) => T.Text -> Either [a] T.Text
 createGraph (!input) = createGraph' input (Left [])
     where
-        createGraph' :: T.Text -> Either [Int8] T.Text -> Either [Int8] T.Text
+        createGraph' :: (Elt a, Integral a) => T.Text -> Either [a] T.Text -> Either [a] T.Text
         createGraph' a r
             | T.null a = r
             | otherwise =
@@ -67,7 +68,7 @@ createGraph (!input) = createGraph' input (Left [])
                         _   -> Right $ T.append (T.pack "cannot parse ") a
                         -- call recursion as last resort -> ensure not much happens on the heap
                         where
-                            createGraph'' :: Int8 -> T.Text -> Either [Int8] T.Text -> Either [Int8] T.Text
+                            createGraph'' :: (Elt a, Integral a) => a -> T.Text -> Either [a] T.Text -> Either [a] T.Text
                             createGraph'' x cs r =
                                 case createGraph' cs r of
                                     Left xs -> Left (x:xs)
@@ -111,7 +112,9 @@ emptyLine a
 
 -- TODO: implement calculation
 --doCalculation :: Matrix Int -> B.ByteString
-doCalculation adj attr = createOutput $ fst $ preprocess adj attr testDensity testDivergence testReq
+doCalculation adj attr =
+        let (adj_, graph_) = preprocess adj attr testDensity testDivergence testReq in
+                createOutput $ trace ("After: "++ show (sumAllS adj_)++"\n") adj_
 
 -- | creates a default-formatted output with \",\" in between elements
 --   and \"\\n\" in between dimensions
@@ -235,4 +238,5 @@ main = do
 
     ----- CALCULATE & OUTPUT
 
+    debug $ "Before: " ++ show (sumAllS graph)
     B.putStr $ doCalculation graph attr
