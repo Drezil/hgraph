@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP             #-}
-{-# LANGUAGE TemplateHaskell, DoAndIfThenElse #-}
+{-# LANGUAGE DoAndIfThenElse #-}
+{-# LANGUAGE TemplateHaskell #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Main
@@ -26,9 +27,9 @@ import           Data.Array.Repa                as A hiding ((++))
 import           Data.Array.Repa.Repr.Unboxed
 import           Data.ByteString.Char8          (ByteString)
 import qualified Data.ByteString.Char8          as B
+import           Data.Char                      (isSpace)
 import           Data.Either                    (lefts, rights)
 import           Data.Functor.Identity
-import           Data.Char                      (isSpace)
 import qualified Data.List                      as L
 import qualified Data.Stream                    as S
 import qualified Data.Text                      as T
@@ -42,14 +43,15 @@ import           Test.QuickCheck.All            (quickCheckAll)
 -- | Parses the graph
 --   a graph consists of NxN chars layouted like
 --
---  10101
---  01010
---  00100
---  01010
---  10101
+--  > 10101
+--  > 01010
+--  > 00100
+--  > 01010
+--  > 10101
 --
---  Valid Chars: 0, 1, \n
---  Invalid: \r
+--    * Valid Chars: 0, 1, \\n
+--
+--    * Invalid: \\r
 createGraph :: T.Text -> Either [Int] T.Text
 createGraph input = createGraph' input (Left [])
     where
@@ -73,13 +75,13 @@ createGraph input = createGraph' input (Left [])
 -- | Parses the attribute-Matrix
 --   the matrix consists of NxM tab-delimeted double-lines like
 --
---  1\t2.3
---  -1\t2.1
---  4\t2.7
---  2.2\t-3e-4
---  3\t2.3
+--  > 1     2.3
+--  > -1    2.1
+--  > 4     2.7
+--  > 2.2   -3e-4
+--  > 3     2.3
 --
---  Valid: Doubles, Tabs (\t)
+--    * Valid: Doubles, Tabs (\\t)
 --
 createAttr :: T.Text -> Either [Double] T.Text
 createAttr input = createAttr' (T.split (=='\t') input) (Left [])
@@ -107,32 +109,32 @@ emptyLine a
 --doCalculation :: Matrix Int -> B.ByteString
 doCalculation graph attr = createOutput attr
 
--- | creates a default-formatted output with "," in between elements
---   and "\n" in between dimensions
---   calls just _createOutput with preset properties
-
---default output with "," within items and "\n" within dimensions
+-- | creates a default-formatted output with \",\" in between elements
+--   and \"\\n\" in between dimensions
+--
+--   calls '_createOutput' with preset properties
 createOutput :: (Unbox a, Show a) => Array U DIM2 a -> B.ByteString
 createOutput a = _createOutput a "," "\n"
 
 -- | creates a formatted output from a DIM2 repa-Array
---   First String is the between-element-separator
---   Second String is the between-dimensions-separator
-
---output Array a with "itt" within items and "lt" within dimensions
+--
+--   * First String is the between-element-separator
+--
+--   * Second String is the between-dimensions-separator
 _createOutput :: (Unbox a, Show a) => Array U DIM2 a -> String -> String -> B.ByteString
 _createOutput a itt lt = B.concat $ L.map B.pack (_createOutput' (extent a) a itt lt)
+        where
+        _createOutput' :: (Unbox a, Show a) => DIM2 -> Array U DIM2 a -> String -> String -> [String]
+        _createOutput' shape@(Z :. si :. sj) a itt lt = [(_createOutput'' shape i 0 a itt) ++ lt | i <- [0..(si - 1)]]
 
-_createOutput' :: (Unbox a, Show a) => DIM2 -> Array U DIM2 a -> String -> String -> [String]
-_createOutput' shape@(Z :. si :. sj) a itt lt = [(_createOutput'' shape i 0 a itt) ++ lt | i <- [0..(si - 1)]]
-
-_createOutput'' :: (Unbox a, Show a) => DIM2 -> Int -> Int -> Array U DIM2 a -> String -> String
-_createOutput'' shape@(Z :. si :. sj) i j a itt
+        _createOutput'' :: (Unbox a, Show a) => DIM2 -> Int -> Int -> Array U DIM2 a -> String -> String
+        _createOutput'' shape@(Z :. si :. sj) i j a itt
                         | sj-1 == j = show (a!(ix2 i j))  -- no "," for last one..
                         | otherwise = show (a!(ix2 i j)) ++ itt ++ (_createOutput'' shape i (j+1) a itt)
 
 
 -- | gets the length of the Left a.
+--
 --   0 if Left a empty or no valid constructor.
 getLength :: Either [a] T.Text -> Int
 getLength (Left a) = length a
@@ -166,7 +168,7 @@ a +|| b = a `using` b
 -- | checks if the submitted Text is empty. If not it will be printed out and the program aborts
 checkError :: T.Text -> IO ()
 checkError a
-        | T.null a  = return ()
+        | emptyLine a  = return ()
         | otherwise = do
                         B.putStr $ encodeUtf8 $ T.append (T.append (T.pack "Error detected:\n") a) (T.pack "\n\n")
                         exitFailure
@@ -175,7 +177,9 @@ checkError a
 --   changed to return () to disable Debug.
 debug a = putStrLn a
 
-exeMain = do
+
+-- | The main-function to bootstrap our application
+main = do
 --    args <- getArgs
 --    input <- case args of
 --            ["--help"] -> showHelp
@@ -226,18 +230,3 @@ exeMain = do
     ----- CALCULATE & OUTPUT
 
     B.putStr $ doCalculation graph attr
-
-
--- Entry point for unit tests.
-testMain = do
-    allPass <- $quickCheckAll -- Run QuickCheck on all prop_ functions
-    unless allPass exitFailure
-
--- This is a clunky, but portable, way to use the same Main module file
--- for both an application and for unit tests.
--- MAIN_FUNCTION is preprocessor macro set to exeMain or testMain.
--- That way we can use the same file for both an application and for tests.
-#ifndef MAIN_FUNCTION
-#define MAIN_FUNCTION exeMain
-#endif
-main = MAIN_FUNCTION
