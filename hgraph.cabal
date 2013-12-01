@@ -20,11 +20,12 @@ executable hgraph
                    parallel -any,
                    repa >=3.2,
                    text -any,
-                   transformers >=0.3.0
+                   transformers >=0.3.0,
+                   vector >=0.10.9 && <0.11
     main-is: Main.hs
     buildable: True
     hs-source-dirs: src
-    other-modules: DCB DCB
+    other-modules: DCB
     ghc-options: -threaded -rtsopts -eventlog
     extensions:    DoAndIfThenElse
  

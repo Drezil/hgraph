@@ -24,7 +24,8 @@ import qualified Data.Array.Repa       as A
 import           Data.Array.Repa.Index
 import           Data.Either
 import           Data.Int
-import qualified Prelude               ((++))
+import qualified Data.Vector.Unboxed   as V
+import           Debug.Trace
 
 type Vector r e = Array r DIM1 e
 type Matrix r e = Array r DIM2 e
@@ -46,6 +47,32 @@ type Density = Double
 --   column in the global adjancency-matrix, a matrix of constraints and a scalar denoting the density
 type Graph = (Vector A.U Int, Constraints, Density)
 
+
+
+testAdj :: Adj
+testAdj = A.fromListUnboxed (ix2 10 10) [0,1,1,1,0,0,1,0,0,1,{----}1,0,0,0,1,0,1,1,0,0,
+                                         1,0,0,1,0,0,0,1,0,1,{----}1,0,1,0,1,1,1,0,0,0,
+                                         0,1,0,1,0,0,1,1,0,0,{----}0,0,0,1,0,0,1,0,1,1,
+                                         1,1,0,1,1,1,0,0,1,0,{----}0,1,1,0,1,0,0,0,0,1,
+                                         0,0,0,0,0,1,1,0,0,1,{----}1,0,1,0,0,1,0,1,1,0]
+testAttr :: Attr
+testAttr = A.fromListUnboxed (ix2 10 4) [  0.2,  1.3,   -1.4,   0.3,
+                                           -0.3, 33.0,   0.0,  -2.3,
+                                           -1.1,-12.0,   2.3,   1.1,
+                                            0.1,  1.7,   3.1,   0.7,
+                                            1.4, 35.1,  -1.1,   1.6,
+                                            0.5, 13.4,  -0.4,   0.5,
+                                            0.9, 13.6,   1.1,   0.1,
+                                            1.2, 12.9,  -0.5,  -0.3,
+                                            3.1,  2.4,  -0.1,   0.7,
+                                            2.6, -7.4,  -0.4,   1.3]
+testDivergence :: MaxDivergence
+testDivergence = A.fromListUnboxed (ix1 4) [0.3, 15.0, 1.8, 0.9]
+
+testDensity = 0.7::Density;
+testReq = 3 ::Int
+
+
 -- | calculates all possible additions to one Graph, yielding a list of valid expansions
 --   i.e. constraint a == Just Constraints for all returned Graphs
 expand :: Adj -> Attr -> Graph ->  [Graph]
@@ -57,21 +84,11 @@ preprocess :: Adj -> Attr -> Density -> MaxDivergence -> Int -> (Adj, [Graph])
 preprocess adj attr d div req =
     let
         (Z:.nNodes:._) = A.extent adj
-        results = map (initGraph attr div req) [(i, j) | i <- [0..nNodes], j <- [(i+1)..nNodes], adj!(ix2 i j) /= 0]
+        results = map (initGraph attr div req) [(i, j) | i <- [0..(nNodes-1)], j <- [(i+1)..(nNodes-1)], adj!(ix2 i j) /= 0]
         finalGraphs = lefts results
-        mask = A.fromListUnboxed (A.extent adj) $reverse $createMask [] 0 0 $rights results
-        createMask :: [Bool] -> Int -> Int -> [(Int, Int)] -> [Bool]
-        createMask acc i j tpl =
-            let
-                nextJ = j `mod` (nNodes-1)
-                nextI = if nextJ == 0 then i+1 else i
-                accV = case tpl of [] -> False; _ -> i == (fst $head tpl) && j == (snd $head tpl)
-                nextList = if accV then tail tpl else tpl
-            in case i > nNodes of
-                    True  -> acc
-                    False -> createMask (accV:acc) nextI nextJ nextList
-        -- TODO : nicht schön, da aus den Tupeln (i,j) auf hässliche Weise eine Matrix erzeugt wird,
-        --        die dann mit adj gefiltert wird. etwas schöner wäre es mit selectP statt fromFunction
+        mask = A.fromUnboxed (A.extent adj) $V.replicate (nNodes*nNodes) False V.//
+                ((map (\(i,j) -> (i*nNodes + (mod j nNodes), True)) $rights results)
+                Prelude.++ (map (\(i,j) -> (j*nNodes + (mod i nNodes), True)) $rights results))
         adj' = A.computeS $A.fromFunction (A.extent adj) (\sh -> if mask!sh then 0 else adj!sh)
     in (adj', finalGraphs)
 
