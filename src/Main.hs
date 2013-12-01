@@ -34,6 +34,7 @@ import qualified Data.List                      as L
 import qualified Data.Stream                    as S
 import qualified Data.Text                      as T
 import           Data.Text.Encoding
+import Data.Int
 import           Debug.Trace
 import           System.Environment
 import           System.Exit                    (exitFailure, exitSuccess)
@@ -52,10 +53,10 @@ import           Test.QuickCheck.All            (quickCheckAll)
 --    * Valid Chars: 0, 1, \\n
 --
 --    * Invalid: \\r
-createGraph :: T.Text -> Either [Int] T.Text
+createGraph :: T.Text -> Either [Int8] T.Text
 createGraph input = createGraph' input (Left [])
     where
-        createGraph' :: T.Text -> Either [Int] T.Text -> Either [Int] T.Text
+        createGraph' :: T.Text -> Either [Int8] T.Text -> Either [Int8] T.Text
         createGraph' a r
             | T.null a = r
             | otherwise =
@@ -65,7 +66,7 @@ createGraph input = createGraph' input (Left [])
                         _   -> Right $ T.append (T.pack "cannot parse ") a
                         -- call recursion as last resort -> ensure not much happens on the heap
                         where
-                            createGraph'' :: Int -> T.Text -> Either [Int] T.Text -> Either [Int] T.Text
+                            createGraph'' :: Int8 -> T.Text -> Either [Int8] T.Text -> Either [Int8] T.Text
                             createGraph'' x cs r =
                                 case createGraph' cs r of
                                     Left xs -> Left (x:xs)
@@ -83,8 +84,10 @@ createGraph input = createGraph' input (Left [])
 --
 --    * Valid: Doubles, Tabs (\\t)
 --
+
+--TODO: curruntly ignores first element
 createAttr :: T.Text -> Either [Double] T.Text
-createAttr input = createAttr' (T.split (=='\t') input) (Left [])
+createAttr input = createAttr' (tail (T.split (=='\t') input)) (Left [])
     where
         createAttr' :: [T.Text] -> Either [Double] T.Text -> Either [Double] T.Text
         createAttr' [] r     = r
@@ -107,7 +110,7 @@ emptyLine a
 
 -- TODO: implement calculation
 --doCalculation :: Matrix Int -> B.ByteString
-doCalculation graph attr = createOutput attr
+doCalculation adj attr = createOutput $ fst $ preprocess adj attr testDensity testDivergence testReq
 
 -- | creates a default-formatted output with \",\" in between elements
 --   and \"\\n\" in between dimensions

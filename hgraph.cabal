@@ -21,7 +21,7 @@ executable hgraph
                    repa >=3.2,
                    text -any,
                    transformers >=0.3.0,
-                   vector >=0.10.9 && <0.11
+                   vector >=0.10.9
     main-is: Main.hs
     buildable: True
     hs-source-dirs: src
