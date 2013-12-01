@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP             #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, DoAndIfThenElse #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Main
@@ -14,9 +14,7 @@
 --
 -----------------------------------------------------------------------------
 
-module Main (
-    main
-) where
+module Main where
 
 import           DCB
 
@@ -30,6 +28,7 @@ import           Data.ByteString.Char8          (ByteString)
 import qualified Data.ByteString.Char8          as B
 import           Data.Either                    (lefts, rights)
 import           Data.Functor.Identity
+import           Data.Char                      (isSpace)
 import qualified Data.List                      as L
 import qualified Data.Stream                    as S
 import qualified Data.Text                      as T
@@ -40,8 +39,17 @@ import           System.Exit                    (exitFailure, exitSuccess)
 import           Test.QuickCheck.All            (quickCheckAll)
 
 
--- TODO: Give createGraph a presized Array and no dynamic [Int].
--- should be createGraph :: T.Text -> Either (Vector Int) T.Text
+-- | Parses the graph
+--   a graph consists of NxN chars layouted like
+--
+--  10101
+--  01010
+--  00100
+--  01010
+--  10101
+--
+--  Valid Chars: 0, 1, \n
+--  Invalid: \r
 createGraph :: T.Text -> Either [Int] T.Text
 createGraph input = createGraph' input (Left [])
     where
@@ -49,16 +57,30 @@ createGraph input = createGraph' input (Left [])
         createGraph' a r
             | T.null a = r
             | otherwise =
-                    let next = (createGraph' (T.tail a) r) in        -- flip cases for less function-calls?
-                        case next of
-                            Left xs ->
-                                case T.head a of
-                                    '0' -> Left $ 0:xs
-                                    '1' -> Left $ 1:xs
-                                    _   -> Right $ T.append (T.pack "cannot parse ") a
-                            Right errstr ->
-                                Right errstr
+                    case T.head a of
+                        '0' -> createGraph'' 0 (T.tail a) r
+                        '1' -> createGraph'' 1 (T.tail a) r
+                        _   -> Right $ T.append (T.pack "cannot parse ") a
+                        -- call recursion as last resort -> ensure not much happens on the heap
+                        where
+                            createGraph'' :: Int -> T.Text -> Either [Int] T.Text -> Either [Int] T.Text
+                            createGraph'' x cs r =
+                                case createGraph' cs r of
+                                    Left xs -> Left (x:xs)
+                                    Right errstr ->
+                                        Right errstr
 
+-- | Parses the attribute-Matrix
+--   the matrix consists of NxM tab-delimeted double-lines like
+--
+--  1\t2.3
+--  -1\t2.1
+--  4\t2.7
+--  2.2\t-3e-4
+--  3\t2.3
+--
+--  Valid: Doubles, Tabs (\t)
+--
 createAttr :: T.Text -> Either [Double] T.Text
 createAttr input = createAttr' (T.split (=='\t') input) (Left [])
     where
@@ -74,14 +96,12 @@ createAttr input = createAttr' (T.split (=='\t') input) (Left [])
                                   Left rs -> Left (this : rs)
                                   _ -> next))
 
+-- | checks if a given Text is empty ("", whitespaces)
 emptyLine :: T.Text -> Bool
 emptyLine a
-    | T.null a    = True
-    | otherwise   = False
-
-emptyLog :: [T.Text] -> Bool
-emptyLog [] = True
-emptyLog a = False --emptyLine $ foldl True (&&) (map emptyLine a)
+    | T.null a        = True
+    | T.all isSpace a = True
+    | otherwise       = False
 
 -- TODO: implement calculation
 --doCalculation :: Matrix Int -> B.ByteString
@@ -96,6 +116,8 @@ createOutput :: (Unbox a, Show a) => Array U DIM2 a -> B.ByteString
 createOutput a = _createOutput a "," "\n"
 
 -- | creates a formatted output from a DIM2 repa-Array
+--   First String is the between-element-separator
+--   Second String is the between-dimensions-separator
 
 --output Array a with "itt" within items and "lt" within dimensions
 _createOutput :: (Unbox a, Show a) => Array U DIM2 a -> String -> String -> B.ByteString
@@ -149,7 +171,8 @@ checkError a
                         B.putStr $ encodeUtf8 $ T.append (T.append (T.pack "Error detected:\n") a) (T.pack "\n\n")
                         exitFailure
 
---change Debug to return () lateron.
+-- | convinience debug-function. Needs to be
+--   changed to return () to disable Debug.
 debug a = putStrLn a
 
 exeMain = do

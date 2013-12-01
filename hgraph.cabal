@@ -1,6 +1,6 @@
 name: hgraph
 version: 0.0.1
-cabal-version: >=1.2
+cabal-version: >= 1.2
 build-type: Simple
 license: AllRightsReserved
 license-file: ""
@@ -24,7 +24,7 @@ executable hgraph
     main-is: Main.hs
     buildable: True
     hs-source-dirs: src
-    other-modules: DCB DCB
+    other-modules: DCB
     ghc-options: -threaded -rtsopts -eventlog
     extensions:    DoAndIfThenElse
  
