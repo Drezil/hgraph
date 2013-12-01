@@ -67,7 +67,7 @@ testAttr = A.fromListUnboxed (ix2 10 4) [  0.2,  1.3,   -1.4,   0.3,
                                             3.1,  2.4,  -0.1,   0.7,
                                             2.6, -7.4,  -0.4,   1.3]
 testDivergence :: MaxDivergence
-testDivergence = A.fromListUnboxed (ix1 4) [0.3, 15.0, 1.8, 0.9]
+testDivergence = A.fromListUnboxed (ix1 4) [3.0, 0.0, 300.0, 2.0, 10.0]
 
 testDensity = 0.7::Density;
 testReq = 3 ::Int
