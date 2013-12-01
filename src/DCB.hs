@@ -30,23 +30,29 @@ type Vector r e = Array r DIM1 e
 type Matrix r e = Array r DIM2 e
 
 type Attr  = Matrix A.U Double
--- Adjecency-Matrix
+-- | Adjacency-Matrix
 type Adj   = Matrix A.U Int8
+
+-- | Matrix of constraints
+
+--TODO: Haddoc!
 type Constraints = (Vector A.U Int8, Matrix A.U Double)
--- Graph consists of a Vector denoting which colums of the matrix represents wich originating
--- column in the global adjencency-matrix, the reduces adjencency-matrix of the graph, a
--- matrix of constraints and a scalar denoting the density
+-- | A vector of weights indicating how much divergence is allowed in which dimension
 type MaxDivergence = Vector A.U Double
+-- | Make this special Scalar explicitly visible
 type Density = Double
 
--- Graph
+-- | consists of a Vector denoting which columns of the matrix represents which originating
+--   column in the global adjancency-matrix, a matrix of constraints and a scalar denoting the density
 type Graph = (Vector A.U Int, Constraints, Density)
 
--- expand calculates all possible additions towards a vector of graphs
-expand :: Adj -> Attr -> [Graph] ->  [Graph]
+-- | calculates all possible additions to one Graph, yielding a list of valid expansions
+--   i.e. constraint a == Just Constraints for all returned Graphs
+expand :: Adj -> Attr -> Graph ->  [Graph]
 expand adj attr g = undefined -- addablePoints -> for each: addPoint -> filterLayer
 
-
+--TODO: Haddoc!
+--Was macht der Int?
 preprocess :: Adj -> Attr -> Density -> MaxDivergence -> Int -> (Adj, [Graph])
 preprocess adj attr d div req =
     let
@@ -69,8 +75,8 @@ preprocess adj attr d div req =
         adj' = A.computeS $A.fromFunction (A.extent adj) (\sh -> if mask!sh then 0 else adj!sh)
     in (adj', finalGraphs)
 
--- initGraph initializes a seed graph if it fulfills the constraints
--- assumption: given nodes i, j are connected
+-- | initializes a seed graph if it fulfills the constraints
+--   assumption: given nodes i, j are connected
 initGraph :: Attr -> MaxDivergence -> Int -> (Int, Int) -> Either Graph (Int, Int)
 initGraph attr div req (i, j) =
     let
@@ -80,7 +86,7 @@ initGraph attr div req (i, j) =
             Just c  -> Left $(A.computeS $A.fromFunction (ix1 2)
                     (\(Z:.i) -> if i == 0 then i else j), c, 1)
 
--- constraintInit checks the contraints for an initializin seed
+-- | checks constraints of an initializing seed
 constraintInit :: Attr -> MaxDivergence -> Int -> Int -> Int -> Maybe Constraints
 constraintInit attr div req i j =
     let
@@ -97,12 +103,12 @@ constraintInit attr div req i j =
         nrHit = A.foldAllS (+) (0::Int) $A.map fromIntegral fulfill
     in if nrHit >= req then Just (A.computeS fulfill, constr) else Nothing
 
--- filterLayer removes all duplicate graphs
+-- | removes all duplicate graphs
 filterLayer :: Vector A.U Graph -> Vector A.U Graph
 filterLayer gs = undefined -- TODO
 
--- constraint gets a Graph and an Attribute-Matrix and yields true, if the Graph still fulfills
--- all constraints defined via the Attribute-Matrix.
+-- | gets a Graph and an Attribute-Matrix and yields true, if the Graph still fulfills
+--   all constraints defined via the Attribute-Matrix.
 constraint :: Attr -> MaxDivergence -> Int -> Graph -> Int -> Maybe Constraints
 constraint attr div req (_, (fulfill, constr), _) newNode =
     let
@@ -127,8 +133,8 @@ updateDensity adj nodes newNode dens =
         n = fromIntegral n'
     in (dens * (n*(n+1)) / 2 + fromIntegral neighbours) * 2 / ((n+1)*(n+2))
 
--- addPoint gets a graph and a tuple of an adjecancy-Vector with an int wich column of the
--- Adjacency-Matrix the Vector should represent to generate further Graphs
+-- | gets a graph and a tuple of an adjecancy-Vector with an int wich column of the
+--   Adjacency-Matrix the Vector should represent to generate further Graphs
 addPoint :: Adj -> Attr -> Density -> MaxDivergence -> Int -> Graph -> Int -> Maybe Graph
 addPoint adj attr d div req g@(nodes, _, dens) n =
     let
@@ -142,6 +148,6 @@ addPoint adj attr d div req g@(nodes, _, dens) n =
                      True  -> Just (A.computeS $nodes ++ A.fromFunction (ix1 1) (\i -> n), c, densNew)
                      False -> Nothing
 
--- addablePoints yields all valid addititons (=neighbours) to a Graph
+-- | yields all valid addititons (=neighbours) to a Graph
 addablePoints :: Adj -> Graph -> Vector A.U Int
 addablePoints adj g = undefined --TODO
