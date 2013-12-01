@@ -9,3 +9,4 @@ dist/setup-config
 .project*
 *autogen*
 dist/build/
+dist/doc/
