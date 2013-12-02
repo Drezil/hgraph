@@ -1,3 +1,6 @@
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  DCB
@@ -46,6 +49,9 @@ type Density = Double
 -- | consists of a Vector denoting which columns of the matrix represents which originating
 --   column in the global adjancency-matrix, a matrix of constraints and a scalar denoting the density
 type Graph = (Vector A.U Int, Constraints, Density)
+
+instance Ord Graph where
+        (nodes, _, _) `compare` (nodes', _, _) = (A.size $ A.extent nodes) `compare` (A.size $ A.extent nodes')
 
 
 

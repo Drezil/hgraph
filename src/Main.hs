@@ -1,7 +1,8 @@
-{-# LANGUAGE BangPatterns    #-}
-{-# LANGUAGE CPP             #-}
-{-# LANGUAGE DoAndIfThenElse #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE BangPatterns         #-}
+{-# LANGUAGE CPP                  #-}
+{-# LANGUAGE DoAndIfThenElse      #-}
+{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE TemplateHaskell      #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Main
@@ -91,9 +92,8 @@ createGraph (!input) = createGraph' input (Left [])
 --    * Valid: Doubles, Tabs (\\t)
 --
 
---TODO: curruntly ignores first element
 createAttr :: T.Text -> Either [Double] T.Text
-createAttr (!input) = createAttr' (tail (T.split (=='\t') input)) (Left [])
+createAttr (!input) = createAttr' (T.split (=='\t') input) (Left [])
     where
         createAttr' :: [T.Text] -> Either [Double] T.Text -> Either [Double] T.Text
         createAttr' [] r     = r
@@ -117,8 +117,8 @@ emptyLine a
 -- TODO: implement calculation
 --doCalculation :: Matrix Int -> B.ByteString
 doCalculation adj attr =
-        let (adj_, graph_) = preprocess adj attr testDensity testDivergence testReq in
-                B.concat $ 
+        let (adj_, graph_) = preprocess adj attr 0.8 (A.fromListUnboxed (ix1 3) [0.5,0.5,0.5]) 2 in
+                B.concat $
                         [
                                 outputArray $ trace ("After: "++ show (sumAllS adj_)++"\n") adj_,
                                 outputGraph graph_
@@ -150,15 +150,15 @@ _outputArray a itt lt = B.concat $
                         | otherwise = show (a!(ix2 i j)) ++ itt ++ (_outputArray'' shape i (j+1) a itt)
 
 outputGraph :: [Graph] -> B.ByteString
-outputGraph gs = B.concat $ L.map (flipto3 _outputGraph "," "\n") gs
+outputGraph gs = B.concat $ L.map (flipto3 _outputGraph "," "\n") (L.sort gs)
                                         +|| (parBuffer 25 rseq) --run parallel
 
 _outputGraph :: Graph -> String -> String -> B.ByteString
 _outputGraph (indices, (constdim, constmat), dens) itt lt =
-                                    let 
+                                    let
                                             plt = B.pack lt
                                             pitt = B.pack itt
-                                    in 
+                                    in
                                         B.concat $
                                         [
                                                 (B.pack $ "Density: " ++ lt ++ show dens),
