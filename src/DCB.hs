@@ -106,8 +106,7 @@ initGraph attr div req (i, j) =
        constr = constraintInit attr div req i j
     in case constr of
             Nothing -> Right (i, j)
-            Just c  -> Left $(A.computeS $A.fromFunction (ix1 2)
-                    (\(Z:.i) -> if i == 0 then i else j), c, 1)
+            Just c  -> Left (A.fromListUnboxed (ix1 2) [i,j], c, 1)
 
 -- | checks constraints of an initializing seed
 constraintInit :: Attr -> MaxDivergence -> Int -> Int -> Int -> Maybe Constraints
@@ -168,7 +167,7 @@ addPoint adj attr d div req g@(nodes, _, dens) n =
              Nothing  -> Nothing
              (Just c) ->
                 case dens >= d of
-                     True  -> Just (A.computeS $nodes ++ A.fromFunction (ix1 1) (\i -> n), c, densNew)
+                     True  -> Just (A.computeS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)
                      False -> Nothing
 
 -- | yields all valid addititons (=neighbours) to a Graph
