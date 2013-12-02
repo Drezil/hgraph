@@ -107,7 +107,7 @@ createAttr (!input) = createAttr' (T.split (=='\t') input) (Left [])
                                   Left rs -> Left (this : rs)
                                   _ -> next))
 
--- | checks if a given Text is empty ("", whitespaces)
+-- | checks if a given Text is empty (Empty String, whitespaces)
 emptyLine :: T.Text -> Bool
 emptyLine a
     | T.null a        = True

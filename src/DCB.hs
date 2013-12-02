@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE TypeSynonymInstances, TypeOperators #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  DCB
@@ -35,12 +35,12 @@ type Matrix r e = Array r DIM2 e
 
 type Attr  = Matrix A.U Double
 -- | Adjacency-Matrix
-type Adj   = Matrix A.U Int16
+type Adj   = Matrix A.U Int8
 
 -- | Matrix of constraints
 
 --TODO: Haddoc!
-type Constraints = (Vector A.U Int16, Matrix A.U Double)
+type Constraints = (Vector A.U Int, Matrix A.U Double)
 -- | A vector of weights indicating how much divergence is allowed in which dimension
 type MaxDivergence = Vector A.U Double
 -- | Make this special Scalar explicitly visible
@@ -140,7 +140,7 @@ constraint attr div req (_, (fulfill, constr), _) newNode =
                  0 -> min (f sh) (attr!sh)
                  1 -> max (f sh) (attr!sh)
         constrNew = A.computeUnboxedS $A.traverse constr id updateConstr
-        fulfillNew = A.zipWith (\i b -> if i == 1 && b then 1::Int16 else 0::Int16) fulfill
+        fulfillNew = A.zipWith (\i b -> if i == 1 && b then 1::Int else 0::Int) fulfill
                 $A.zipWith (\thediv dist -> abs dist <= thediv) div $A.foldS (-) 0 constrNew
         nrHit = A.foldAllS (+) (0::Int) $A.map fromIntegral fulfillNew
     in if nrHit >= req then Just (A.computeS fulfillNew, constrNew) else Nothing
@@ -171,5 +171,19 @@ addPoint adj attr d div req g@(nodes, _, dens) n =
                      False -> Nothing
 
 -- | yields all valid addititons (=neighbours) to a Graph
-addablePoints :: Adj -> Graph -> Vector A.U Int
-addablePoints adj g = undefined --TODO
+addablePoints :: Adj -> Graph -> Vector A.U Int8
+addablePoints adj (ind,_,_) = A.computeS $ 
+                                        A.traverse 
+                                                adj 
+                                                reduceDim 
+                                                (foldOr ind)
+           where
+
+                reduceDim :: (A.Shape sh, Integral a) => (sh :. a) -> sh
+                reduceDim (a :. b) = a --A.shapeOfList $ tail $ A.listOfShape a
+
+                foldOr :: (A.Shape sh', Num a) => Vector A.U Int -> ((sh' :. Int) -> a) -> sh' -> a
+                foldOr indlist lookup ind = foldl1 (+) [lookup (ind :. i) | i <- (map fromIntegral (A.toList indlist))]
+
+
+ 
