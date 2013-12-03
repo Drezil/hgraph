@@ -117,7 +117,7 @@ emptyLine a
 -- TODO: implement calculation
 --doCalculation :: Matrix Int -> B.ByteString
 doCalculation adj attr =
-        let (adj_, graph_) = preprocess adj attr 0.8 (A.fromListUnboxed (ix1 3) [0.5,0.5,0.5]) 2 in
+        let (adj_, graph_) = preprocess adj attr {--0.8--} (A.fromListUnboxed (ix1 3) [0.5,0.5,0.5]) 2 in
                 B.concat $
                         [
                                 outputArray $ trace ("After: "++ show (sumAllS adj_)++"\n") adj_,

@@ -41,34 +41,34 @@ flip9 fun i a b c d e f g h = fun a b c d e f g h i
 flipto1 :: (a -> b) -> (a -> b)
 flipto1 = id
 
--- | Move second argument to last place ('flip' synonym for style uniformity)
+-- | Move first argument to last (second) place ('flip' synonym for style uniformity)
 flipto2 :: (a -> b -> c) -> (b -> a -> c)
 flipto2 = flip
 
--- | Move third argument to last place
+-- | Move first argument to last (third) place
 flipto3 :: (a -> b -> c -> d) -> b -> c -> a -> d
 flipto3 fun b c a = fun a b c 
 
--- | Move forth argument to last place
+-- | Move first argument to last (forth) place
 flipto4 :: (a -> b -> c -> d -> e) -> b -> c -> d -> a -> e
 flipto4 fun b c d a = fun a b c d 
 
--- | Move fifth argument to last place
+-- | Move first argument to last (fifth) place
 flipto5 :: (a -> b -> c -> d -> e -> f) -> b -> c -> d -> e -> a -> f
 flipto5 fun b c d e a = fun a b c d e 
 
--- | Move sixth argument to last place
+-- | Move first argument to last (sixth) place
 flipto6 :: (a -> b -> c -> d -> e -> f -> g) -> b -> c -> d -> e -> f-> a -> g
 flipto6 fun b c d e f a = fun a b c d e f
 
--- | Move seventh argument to last place
+-- | Move first argument to last (seventh) place
 flipto7 :: (a -> b -> c -> d -> e -> f -> g -> h) -> b -> c -> d -> e -> f -> g -> a -> h
 flipto7 fun b c d e f g a = fun a b c d e f g
 
--- | Move eights argument to last place
+-- | Move first argument to last (eights) place
 flipto8 :: (a -> b -> c -> d -> e -> f -> g -> h -> i) -> b -> c -> d -> e -> f -> g -> h -> a -> i
 flipto8 fun b c d e f g h a = fun a b c d e f g h
 
--- | Move ninth argument to last place
+-- | Move first argument to last (ninth) place
 flipto9 :: (a -> b -> c -> d -> e -> f -> g -> h -> i -> j) -> b -> c -> d -> e -> f -> g -> h -> i -> a -> j
 flipto9 fun b c d e f g h i a = fun a b c d e f g h i

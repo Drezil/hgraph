@@ -33,24 +33,31 @@ import           Data.Maybe
 import qualified Data.Vector.Unboxed   as V
 import           Debug.Trace
 
+-- | a one-dimensional array
 type Vector r e = Array r DIM1 e
+-- | a two-dimensional array
 type Matrix r e = Array r DIM2 e
 
+-- | A 'Matrix' of attribute values assigned to a graph’s nodes.
+--   Each row contains the corresponding node’s attribute values.
 type Attr  = Matrix A.U Double
 -- | Adjacency-Matrix
 type Adj   = Matrix A.U Int8
 
--- | Matrix of constraints
-
---TODO: Haddoc!
+-- | Matrix storing the extent of a 'Graph'’s constraints fulfillment.
+--   It stores the minimum (zeroth column) and maximum (first column) value of all
+--   the 'Graph'’s nodes per attribute.
+--   The 'Vector' stores values of @1@ if the bounds are within the allowed range
+--   ragarding the corresponding attribute, or @0@ if not.
 type Constraints = (Vector A.U Int, Matrix A.U Double)
--- | A vector of weights indicating how much divergence is allowed in which dimension
+-- | A 'Vector' of weights indicating how much divergence is allowed in which dimension.
+--   Each dimension represents an attribute.
 type MaxDivergence = Vector A.U Double
--- | Make this special Scalar explicitly visible
+-- | A graph’s density.
 type Density = Double
 
--- | consists of a Vector denoting which columns of the matrix represents which originating
---   column in the global adjancency-matrix, a matrix of constraints and a scalar denoting the density
+-- | consists of a 'Vector' denoting which columns of the 'Matrix' represents which originating
+--   column in the global adjancency-matrix, a 'Matrix' of 'Constraints' and a scalar denoting the graph’s 'Density'
 type Graph = (Vector A.U Int, Constraints, Density)
 
 instance Ord Graph where
@@ -89,10 +96,17 @@ expand adj attr d div req g@(ind,_,_) = catMaybes $ map
                                                         (addPoint adj attr d div req g)
                                                         (V.toList $ V.findIndices (==True) $ A.toUnboxed $ addablePoints adj g)
 
---TODO: Haddoc!
---Was macht der Int?
-preprocess :: Adj -> Attr -> Density -> MaxDivergence -> Int -> (Adj, [Graph])
-preprocess adj attr d div req =
+-- | Creates an adjacency matrix from the given adjacency matrix where all
+--   edges are removed whose belonging nodes cannot fulfill the passed constraints.
+--   Additionally, all pairs of connected nodes that satisfy the constraints are
+--   returned as a 'Graph'.
+preprocess :: Adj           -- ^ original adjacency matrix
+           -> Attr          -- ^ table of the node’s attributes
+	       -> MaxDivergence -- ^  maximum allowed ranges of the node’s attribute
+	                        --   values to be considered as consistent
+	       -> Int           -- ^ required number of consistent attributes
+	       -> (Adj, [Graph])
+preprocess adj attr div req =
     let
         (Z:.nNodes:._) = A.extent adj
         results = map (initGraph attr div req) [(i, j) | i <- [0..(nNodes-1)], j <- [(i+1)..(nNodes-1)], adj!(ix2 i j) /= 0]
@@ -103,9 +117,13 @@ preprocess adj attr d div req =
         adj' = A.computeS $A.fromFunction (A.extent adj) (\sh -> if mask!sh then 0 else adj!sh)
     in (adj', finalGraphs)
 
--- | initializes a seed graph if it fulfills the constraints
---   assumption: given nodes i, j are connected
-initGraph :: Attr -> MaxDivergence -> Int -> (Int, Int) -> Either Graph (Int, Int)
+-- | Initializes a seed 'Graph' if it fulfills the constraints, returns the input nodes
+--   otherwise. It is assumed that the given nodes are connected.
+initGraph :: Attr                    -- ^ table of all node’s attributes
+          -> MaxDivergence
+          -> Int                     -- ^ required number of consistent attributes
+          -> (Int, Int)              -- ^ nodes to create a seed 'Graph' of
+          -> Either Graph (Int, Int)
 initGraph attr div req (i, j) =
     let
        constr = constraintInit attr div req i j
@@ -113,8 +131,12 @@ initGraph attr div req (i, j) =
             Nothing -> Right (i, j)
             Just c  -> Left (A.fromListUnboxed (ix1 2) [i,j], c, 1)
 
--- | checks constraints of an initializing seed
-constraintInit :: Attr -> MaxDivergence -> Int -> Int -> Int -> Maybe Constraints
+-- | checks constraints of an initializing seed and creates 'Constraints' matrix if the
+--   check is positive
+constraintInit :: Attr -> MaxDivergence -> Int -- ^ required number of consistent attributes
+               -> Int -- ^ first node to test
+               -> Int -- ^ second node to test first node against
+               -> Maybe Constraints
 constraintInit attr div req i j =
     let
         (Z:._:.nAttr) = A.extent attr
@@ -134,9 +156,13 @@ constraintInit attr div req i j =
 filterLayer :: Vector A.U Graph -> Vector A.U Graph
 filterLayer gs = undefined -- TODO
 
--- | gets a Graph and an Attribute-Matrix and yields true, if the Graph still fulfills
---   all constraints defined via the Attribute-Matrix.
-constraint :: Attr -> MaxDivergence -> Int -> Graph -> Int -> Maybe Constraints
+-- | Checks whether a given base 'Graph' can be extended by a single node and
+--   the resulting 'Graph' still satisfies the given attribute constraints.
+--   In case of a successful expansion the updated 'Constraints' matrix is returned.
+constraint :: Attr -> MaxDivergence -> Int -- ^ required number of consistent attributes
+           -> Graph -- ^ base graph
+           -> Int   -- ^ node to extend base graph by
+           -> Maybe Constraints
 constraint attr div req (_, (fulfill, constr), _) newNode =
     let
         updateConstr :: (DIM2 -> Double) -> DIM2 -> Double
@@ -150,8 +176,12 @@ constraint attr div req (_, (fulfill, constr), _) newNode =
         nrHit = A.foldAllS (+) (0::Int) $A.map fromIntegral fulfillNew
     in if nrHit >= req then Just (A.computeS fulfillNew, constrNew) else Nothing
 
-
-updateDensity :: Adj -> Vector A.U Int -> Int -> Density -> Density
+-- updates the density of a graph extended by a single node
+updateDensity :: Adj            -- ^ global adjacency matrix of all nodes
+              -> Vector A.U Int -- ^ nodes of the base graph
+              -> Int            -- ^ node to extend the graph by
+              -> Density        -- ^ current density of base graph
+              -> Density        -- ^ new density of expanded graph
 updateDensity adj nodes newNode dens =
     let
         neighbours = A.foldAllS (+) (0::Int)
@@ -160,9 +190,17 @@ updateDensity adj nodes newNode dens =
         n = fromIntegral n'
     in (dens * (n*(n+1)) / 2 + fromIntegral neighbours) * 2 / ((n+1)*(n+2))
 
--- | gets a graph and a tuple of an adjecancy-Vector with an int wich column of the
---   Adjacency-Matrix the Vector should represent to generate further Graphs
-addPoint :: Adj -> Attr -> Density -> MaxDivergence -> Int -> Graph -> Int -> Maybe Graph
+
+-- | Checks a 'Graph' expansion with a single node regarding both the attribute constraints
+--   and a minimum density. If it passes the test the extended graph is returned.
+addPoint :: Adj           -- ^ global adjacency matrix of all nodes
+         -> Attr          -- ^ global attribute matrix
+         -> Density       -- ^ required minimum graph’s density
+         -> MaxDivergence -- ^ allowed divergence per attribute
+         -> Int           -- ^ equired number of consistent attributes
+         -> Graph         -- ^ base graph
+         -> Int           -- ^ node to extend base graph by
+         -> Maybe Graph
 addPoint adj attr d div req g@(nodes, _, dens) n =
     let
         constr = constraint attr div req g n
@@ -191,7 +229,5 @@ addablePoints adj (ind,_,_) = A.computeS $
                 foldOr indlist lookup ind@(a :. pos) = case V.any (== pos) $ A.toUnboxed indlist of
                                                 True -> False
                                                 _ -> (foldl1 (+) [lookup (ind :. i) | i <- (map fromIntegral (A.toList indlist))]) > 0
-
-
 
 
