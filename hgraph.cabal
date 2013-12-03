@@ -26,8 +26,10 @@ executable hgraph
     buildable: True
     hs-source-dirs: src
     other-modules: 
-                   DCB,
-                   Util
+                   Util,
+                   DCB.DCB,
+                   DCB.Structures,
+                   DCB.IO
     ghc-options: -eventlog -Odph -rtsopts -threaded -fno-liberate-case -funfolding-use-threshold1000 -funfolding-keeness-factor1000 -optlo-O3
     extensions:    
                    BangPatterns, 
@@ -43,4 +45,8 @@ test-suite test-hgraph
     cpp-options: -DMAIN_FUNCTION=testMain
     hs-source-dirs: src
     ghc-options: -threaded -rtsopts -eventlog
-    other-modules: Util
+    other-modules: 
+                   Util,
+                   DCB.Structures,
+                   DCB.DCB,
+                   DCB.IO

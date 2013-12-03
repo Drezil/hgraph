@@ -13,14 +13,15 @@
 -- Portability :
 --
 -- |
---
------------------------------------------------------------------------------
+--DCB.DCB---------------------------------------------------------------------------
 
-module DCB where
+module DCB.DCB where
 import           Util
+import           DCB.Structures
+import           DCB.IO
 
 import           Prelude               hiding ((++))
-import qualified Prelude               ((++))
+import qualified Prelude               as P ((++))
 
 import           Control.Monad.Par
 import           Data.Array.Repa       ((:.) (..), Array, (!), (*^), (++), (+^),
@@ -33,36 +34,8 @@ import qualified Data.List             as L
 import           Data.Maybe
 import qualified Data.Vector.Unboxed   as V
 import           Debug.Trace
+import qualified Data.ByteString.Char8          as B
 
--- | a one-dimensional array
-type Vector r e = Array r DIM1 e
--- | a two-dimensional array
-type Matrix r e = Array r DIM2 e
-
--- | A 'Matrix' of attribute values assigned to a graph’s nodes.
---   Each row contains the corresponding node’s attribute values.
-type Attr  = Matrix A.U Double
--- | Adjacency-Matrix
-type Adj   = Matrix A.U Int8
-
--- | Matrix storing the extent of a 'Graph'’s constraints fulfillment.
---   It stores the minimum (zeroth column) and maximum (first column) value of all
---   the 'Graph'’s nodes per attribute.
---   The 'Vector' stores values of @1@ if the bounds are within the allowed range
---   ragarding the corresponding attribute, or @0@ if not.
-type Constraints = (Vector A.U Int, Matrix A.U Double)
--- | A 'Vector' of weights indicating how much divergence is allowed in which dimension.
---   Each dimension represents an attribute.
-type MaxDivergence = Vector A.U Double
--- | A graph’s density.
-type Density = Double
-
--- | consists of a 'Vector' denoting which columns of the 'Matrix' represents which originating
---   column in the global adjancency-matrix, a 'Matrix' of 'Constraints' and a scalar denoting the graph’s 'Density'
-type Graph = (Vector A.U Int, Constraints, Density)
-
-instance Ord Graph where
-        (nodes, _, _) `compare` (nodes', _, _) = (A.size $ A.extent nodes) `compare` (A.size $ A.extent nodes')
 
 
 
@@ -93,13 +66,13 @@ testReq = 3 ::Int
 --TODO: Do we have to filter?
 
 step :: [Graph] -> Adj -> Attr -> Density -> MaxDivergence -> Int -> [Graph]
-step gs a b c d e = filterLayer $ concat $ map (expand a b c d e ) gs
+step gs@((ind,_,_):_) a b c d e = trace ("step from " P.++ show (A.extent ind) ) $ filterLayer $ concat $ map (expand a b c d e ) gs
 
 
 -- | calculates all possible additions to one Graph, yielding a list of valid expansions
 --   i.e. constraint a == Just Constraints for all returned Graphs
 expand :: Adj -> Attr -> Density -> MaxDivergence -> Int -> Graph ->  [Graph]
-expand adj attr d div req g@(ind,_,_) = catMaybes $ map
+expand adj attr d div req g@(ind,_,_) = trace ("expanding graph "P.++ B.unpack (outputGraph [g])) catMaybes $ map
                                                         (addPoint adj attr d div req g)
                                                         (V.toList $ V.findIndices (==True) $ A.toUnboxed $ addablePoints adj g)
 
@@ -120,7 +93,7 @@ preprocess adj attr div req =
         finalGraphs = lefts results
         mask = A.fromUnboxed (A.extent adj) $V.replicate (nNodes*nNodes) False V.//
                 ((map (\(i,j) -> (i*nNodes + (mod j nNodes), True)) $rights results)
-                Prelude.++ (map (\(i,j) -> (j*nNodes + (mod i nNodes), True)) $rights results))
+                P.++ (map (\(i,j) -> (j*nNodes + (mod i nNodes), True)) $rights results))
         adj' = A.computeS $A.fromFunction (A.extent adj) (\sh -> if mask!sh then 0 else adj!sh)
     in (adj', finalGraphs)
 
@@ -181,6 +154,7 @@ constraint attr div req (_, (fulfill, constr), _) newNode =
                  0 -> min (f sh) (attr!sh)
                  1 -> max (f sh) (attr!sh)
         constrNew = A.computeUnboxedS $A.traverse constr id updateConstr
+        --TODO: filfillNew is bogus..   
         fulfillNew = A.zipWith (\i b -> if i == 1 && b then 1::Int else 0::Int) fulfill
                 $A.zipWith (\thediv dist -> abs dist <= thediv) div $A.foldS (-) 0 constrNew
         nrHit = A.foldAllS (+) (0::Int) $A.map fromIntegral fulfillNew
@@ -194,11 +168,32 @@ updateDensity :: Adj            -- ^ global adjacency matrix of all nodes
               -> Density        -- ^ new density of expanded graph
 updateDensity adj nodes newNode dens =
     let
-        neighbours = A.foldAllS (+) (0::Int)
-                $A.traverse nodes id (\f sh -> fromIntegral $adj!(ix2 (f sh) newNode))
+        neighbourSlice = A.traverse 
+                                    (A.slice (A.map fromIntegral adj) (A.Any :. newNode)) -- Array
+                                    id                                                    -- same Size
+                                    (\f sh@(_ :. i) -> 
+                                        if V.any (==i) (A.toUnboxed nodes) then --if connected to graph
+                                                (f sh)                          --return connection
+                                        else
+                                                0)                              --never connect to nodes not extisting
+        neighbours = A.foldAllS (+) (0::Int) (trace (show $ A.computeUnboxedS neighbourSlice) neighbourSlice)
+                
+                {- A.traverse adj (reduceDim) (\f (Z :. i) -> 
+                                if not $ V.any (==i) $ A.toUnboxed nodes then
+                                        fromIntegral $adj!(ix2 i newNode) 
+                                   else
+                                        0)-}
         (Z:.n') = A.extent nodes
         n = fromIntegral n'
-    in (dens * (n*(n+1)) / 2 + fromIntegral neighbours) * 2 / ((n+1)*(n+2))
+        newdens = (dens * (n*(n+1)) / 2 + fromIntegral neighbours) * 2 / ((n+1)*(n+2)) 
+    in newdens
+        + trace (
+                (show dens) P.++ " ("P.++(show (dens * (n*(n+1)) / 2)) P.++"/"P.++ (show ((n*(n+1))/(2::Double))) P.++ ") -> "
+                P.++ (show newdens) P.++ " ("P.++(show (newdens * ((n+2)*(n+1)) / 2)) P.++"/"P.++ (show (((n+2)*(n+1))/(2::Double))) P.++ ") \n"
+                P.++ (show newNode) 
+                P.++ " -> " 
+                P.++ (show neighbours)) 
+                0
 
 
 -- | Checks a 'Graph' expansion with a single node regarding both the attribute constraints
@@ -223,6 +218,9 @@ addPoint adj attr d div req g@(nodes, _, dens) n =
                      True  -> Just (A.computeS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)
                      False -> Nothing
 
+reduceDim :: (A.Shape sh, Integral a) => (sh :. a) -> sh
+reduceDim (a :. b) = a --A.shapeOfList $ tail $ A.listOfShape a
+
 -- | yields all valid addititons (=neighbours) to a Graph
 addablePoints :: Adj -> Graph -> Vector A.U Bool
 addablePoints adj (ind,_,_) = A.computeS $
@@ -232,8 +230,6 @@ addablePoints adj (ind,_,_) = A.computeS $
                                                 (foldOr ind))
            where
 
-                reduceDim :: (A.Shape sh, Integral a) => (sh :. a) -> sh
-                reduceDim (a :. b) = a --A.shapeOfList $ tail $ A.listOfShape a
 
                 foldOr :: (A.Shape sh') => Vector A.U Int -> ((sh' :. Int :. Int) -> Int8) -> (sh' :. Int) -> Bool
                 foldOr indlist lookup ind@(a :. pos) = case V.any (== pos) $ A.toUnboxed indlist of

@@ -1,5 +1,7 @@
 module Util where
 
+import           Control.Parallel.Strategies
+
 -- | Move first argument to first place (for style uniformity)
 flip1 :: (a -> b) -> (a -> b)
 flip1 = id
@@ -72,3 +74,13 @@ flipto8 fun b c d e f g h a = fun a b c d e f g h
 -- | Move first argument to last (ninth) place
 flipto9 :: (a -> b -> c -> d -> e -> f -> g -> h -> i -> j) -> b -> c -> d -> e -> f -> g -> h -> i -> a -> j
 flipto9 fun b c d e f g h i a = fun a b c d e f g h i
+
+infixl 1 +||
+
+-- | short for a `using` b. We don't need brackets this way and are able to comment out parallelism.
+(+||) :: a -> Strategy a -> a
+a +|| b = a `using` b
+
+appendS :: (Show a) => String -> String -> a -> String
+appendS sep a b = (a ++ show b) ++ sep
+
