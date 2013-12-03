@@ -66,13 +66,15 @@ testReq = 3 ::Int
 --TODO: Do we have to filter?
 
 step :: [Graph] -> Adj -> Attr -> Density -> MaxDivergence -> Int -> [Graph]
-step gs@((ind,_,_):_) a b c d e = trace ("step from " P.++ show (A.extent ind) ) $ filterLayer $ concat $ map (expand a b c d e ) gs
+step gs@((ind,_,_):_) a b c d e = --trace ("step from " P.++ show (A.extent ind) ) $ 
+                                  filterLayer $ concat $ map (expand a b c d e ) gs
 
 
 -- | calculates all possible additions to one Graph, yielding a list of valid expansions
 --   i.e. constraint a == Just Constraints for all returned Graphs
 expand :: Adj -> Attr -> Density -> MaxDivergence -> Int -> Graph ->  [Graph]
-expand adj attr d div req g@(ind,_,_) = trace ("expanding graph "P.++ B.unpack (outputGraph [g])) catMaybes $ map
+expand adj attr d div req g@(ind,_,_) = --trace ("expanding graph "P.++ B.unpack (outputGraph [g])) 
+                                        catMaybes $ map
                                                         (addPoint adj attr d div req g)
                                                         (V.toList $ V.findIndices (==True) $ A.toUnboxed $ addablePoints adj g)
 
@@ -146,19 +148,34 @@ constraint :: Attr -> MaxDivergence -> Int -- ^ required number of consistent at
            -> Graph -- ^ base graph
            -> Int   -- ^ node to extend base graph by
            -> Maybe Constraints
-constraint attr div req (_, (fulfill, constr), _) newNode =
+constraint attr div req (ind, (fulfill, constr), _) newNode =
     let
+        --TODO: UGLY hack... this has to be somewhere .. -.-
+        posInf = read "Infinity" :: Double
+        negInf = read "-Infinity" :: Double
+        -- convert into Vector of new Indices after appending new node-index
+        totalInd = A.toUnboxed $ A.computeUnboxedS $ ind ++ A.fromListUnboxed (ix1 1) [newNode]
         updateConstr :: (DIM2 -> Double) -> DIM2 -> Double
-        updateConstr f sh@(Z:._:.c) =
+        updateConstr f sh@(Z:.i:.c) = 
+            let
+                slice = A.slice attr (A.Any :. i)
+                mins = A.traverse slice id (\g sh'@(Z :. j)-> if V.any (==j) totalInd then (g sh') else posInf)
+                maxs = A.traverse slice id (\g sh'@(Z :. j)-> if V.any (==j) totalInd then (g sh') else negInf)
+                
+            in
+            -- trace (show i P.++ show (A.toList slice) P.++ show c P.++ "\n " P.++ show (A.foldAllS (max) negInf $ maxs)) $
             case c of
-                 0 -> min (f sh) (attr!sh)
-                 1 -> max (f sh) (attr!sh)
-        constrNew = A.computeUnboxedS $A.traverse constr id updateConstr
-        --TODO: filfillNew is bogus..   
-        fulfillNew = A.zipWith (\i b -> if i == 1 && b then 1::Int else 0::Int) fulfill
+                 0 -> A.foldAllS (min) posInf mins
+                 1 -> A.foldAllS (max) negInf maxs
+                 _ -> error "attr wrong"
+        ! constrNew = A.computeUnboxedS $ A.traverse constr id updateConstr
+        
+        --fulfill is borked..
+        ! fulfillNew = A.zipWith (\i b -> if i == 1 && b then 1::Int else 0::Int) fulfill
                 $A.zipWith (\thediv dist -> abs dist <= thediv) div $A.foldS (-) 0 constrNew
-        nrHit = A.foldAllS (+) (0::Int) $A.map fromIntegral fulfillNew
-    in if nrHit >= req then Just (A.computeS fulfillNew, constrNew) else Nothing
+        ! nrHit = A.foldAllS (+) (0::Int) $A.map fromIntegral fulfillNew
+    in if nrHit >= req then Just {-$ trace ("returning const-matrix for "P.++ show (A.toList ind) P.++"\n" P.++ (B.unpack $ outputArray constrNew))-}
+                                (A.computeS fulfillNew, constrNew) else Nothing
 
 -- updates the density of a graph extended by a single node
 updateDensity :: Adj            -- ^ global adjacency matrix of all nodes
@@ -176,7 +193,7 @@ updateDensity adj nodes newNode dens =
                                                 (f sh)                          --return connection
                                         else
                                                 0)                              --never connect to nodes not extisting
-        neighbours = A.foldAllS (+) (0::Int) (trace (show $ A.computeUnboxedS neighbourSlice) neighbourSlice)
+        neighbours = A.foldAllS (+) (0::Int) ({- trace (show $ A.computeUnboxedS neighbourSlice)-} neighbourSlice)
                 
                 {- A.traverse adj (reduceDim) (\f (Z :. i) -> 
                                 if not $ V.any (==i) $ A.toUnboxed nodes then
@@ -185,15 +202,15 @@ updateDensity adj nodes newNode dens =
                                         0)-}
         (Z:.n') = A.extent nodes
         n = fromIntegral n'
-        newdens = (dens * (n*(n+1)) / 2 + fromIntegral neighbours) * 2 / ((n+1)*(n+2)) 
+        newdens = (dens * ((n)*(n-1)) / 2 + fromIntegral neighbours) * 2 / ((n+1)*(n)) 
     in newdens
-        + trace (
-                (show dens) P.++ " ("P.++(show (dens * (n*(n+1)) / 2)) P.++"/"P.++ (show ((n*(n+1))/(2::Double))) P.++ ") -> "
-                P.++ (show newdens) P.++ " ("P.++(show (newdens * ((n+2)*(n+1)) / 2)) P.++"/"P.++ (show (((n+2)*(n+1))/(2::Double))) P.++ ") \n"
+        {-+ trace (
+                (show dens) P.++ " ("P.++(show (dens * (n*(n-1)) / 2)) P.++"/"P.++ (show ((n*(n-1))/(2::Double))) P.++ ") -> "
+                P.++ (show newdens) P.++ " ("P.++(show (newdens * ((n)*(n+1)) / 2)) P.++"/"P.++ (show (((n)*(n+1))/(2::Double))) P.++ ") \n"
                 P.++ (show newNode) 
                 P.++ " -> " 
                 P.++ (show neighbours)) 
-                0
+                0-}
 
 
 -- | Checks a 'Graph' expansion with a single node regarding both the attribute constraints
@@ -213,9 +230,11 @@ addPoint adj attr d div req g@(nodes, _, dens) n =
     in
         case constr of
              Nothing  -> Nothing
-             (Just c) ->
+             (Just c@(ful,constr)) ->
+                --trace (B.unpack $ outputArray constr) $
                 case densNew >= d of
-                     True  -> Just (A.computeS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)
+                     True  -> Just {-$ trace ("submitting graph:\n================\n " P.++ (B.unpack $ outputGraph [(A.computeS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)])) -}
+                                   (A.computeS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)
                      False -> Nothing
 
 reduceDim :: (A.Shape sh, Integral a) => (sh :. a) -> sh

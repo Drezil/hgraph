@@ -35,7 +35,20 @@ type Density = Double
 --   column in the global adjancency-matrix, a 'Matrix' of 'Constraints' and a scalar denoting the graph’s 'Density'
 type Graph = (Vector A.U Int, Constraints, Density)
 
+-- | inverse sorting on graphs.
+--
+--   "smallest" graph has max number of Nodes
+--
+--   If Nodecount is identical we prioritize the number of fulfilled Constraints
 instance Ord Graph where
-        (nodes, _, _) `compare` (nodes', _, _) = (A.size $ A.extent nodes) `compare` (A.size $ A.extent nodes')
+        (nodes, (const,_), _) `compare` (nodes', (const',_), _) = 
+                let 
+                        s1 = (A.size $ A.extent nodes')
+                        s2 = (A.size $ A.extent nodes)
+                in
+                        if s1 == s2 then
+                                (A.sumAllS const') `compare` (A.sumAllS const)
+                        else
+                                s1 `compare` s2 
 
 
