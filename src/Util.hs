@@ -10,11 +10,31 @@ flip2 = flip
 
 -- | Move third argument to first place
 flip3 :: (a -> b -> c -> d) -> c -> a -> b -> d
-flip3 f c a b = f a b c
+flip3 fun c a b = fun a b c
 
 -- | Move fourth argument to first place
 flip4 :: (a -> b -> c -> d -> e) -> d -> a -> b -> c -> e
-flip4 f d a b c = f a b c d 
+flip4 fun d a b c = fun a b c d 
+
+-- | Move fifth argument to first place
+flip5 :: (a -> b -> c -> d -> e -> f) -> e -> a -> b -> c -> d -> f
+flip5 fun e a b c d = fun a b c d e 
+
+-- | Move sixth argument to first place
+flip6 :: (a -> b -> c -> d -> e -> f -> g) -> f -> a -> b -> c -> d -> e -> g 
+flip6 fun f a b c d e = fun a b c d e f
+
+-- | Move seventh argument to first place
+flip7 :: (a -> b -> c -> d -> e -> f -> g -> h) -> g -> a -> b -> c -> d -> e -> f -> h
+flip7 fun g a b c d e f = fun a b c d e f g
+
+-- | Move eighths argument to first place
+flip8 :: (a -> b -> c -> d -> e -> f -> g -> h -> i) -> h -> a -> b -> c -> d -> e -> f -> g -> i
+flip8 fun h a b c d e f g = fun a b c d e f g h
+
+-- | Move ninths argument to first place
+flip9 :: (a -> b -> c -> d -> e -> f -> g -> h -> i -> j) -> i -> a -> b -> c -> d -> e -> f -> g -> h -> j
+flip9 fun i a b c d e f g h = fun a b c d e f g h i
 
 
 -- | Move first argument to last place (for style uniformity)

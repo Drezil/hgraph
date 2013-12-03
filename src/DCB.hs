@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
-{-# LANGUAGE TypeSynonymInstances, TypeOperators #-}
+{-# LANGUAGE TypeOperators        #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  DCB
@@ -16,6 +17,7 @@
 -----------------------------------------------------------------------------
 
 module DCB where
+import           Util
 
 import           Prelude               hiding ((++))
 import qualified Prelude               ((++))
@@ -27,6 +29,7 @@ import qualified Data.Array.Repa       as A
 import           Data.Array.Repa.Index
 import           Data.Either
 import           Data.Int
+import           Data.Maybe
 import qualified Data.Vector.Unboxed   as V
 import           Debug.Trace
 
@@ -81,8 +84,10 @@ testReq = 3 ::Int
 
 -- | calculates all possible additions to one Graph, yielding a list of valid expansions
 --   i.e. constraint a == Just Constraints for all returned Graphs
-expand :: Adj -> Attr -> Graph ->  [Graph]
-expand adj attr g = undefined -- addablePoints -> for each: addPoint -> filterLayer
+expand :: Adj -> Attr -> Density -> MaxDivergence -> Int -> Graph ->  [Graph]
+expand adj attr d div req g@(ind,_,_) = catMaybes $ map
+                                                        (addPoint adj attr d div req g)
+                                                        (V.toList $ V.findIndices (==True) $ A.toUnboxed $ addablePoints adj g)
 
 --TODO: Haddoc!
 --Was macht der Int?
@@ -171,19 +176,22 @@ addPoint adj attr d div req g@(nodes, _, dens) n =
                      False -> Nothing
 
 -- | yields all valid addititons (=neighbours) to a Graph
-addablePoints :: Adj -> Graph -> Vector A.U Int8
-addablePoints adj (ind,_,_) = A.computeS $ 
-                                        A.traverse 
-                                                adj 
-                                                reduceDim 
-                                                (foldOr ind)
+addablePoints :: Adj -> Graph -> Vector A.U Bool
+addablePoints adj (ind,_,_) = A.computeS $
+                                        (A.traverse
+                                                adj
+                                                reduceDim
+                                                (foldOr ind))
            where
 
                 reduceDim :: (A.Shape sh, Integral a) => (sh :. a) -> sh
                 reduceDim (a :. b) = a --A.shapeOfList $ tail $ A.listOfShape a
 
-                foldOr :: (A.Shape sh', Num a) => Vector A.U Int -> ((sh' :. Int) -> a) -> sh' -> a
-                foldOr indlist lookup ind = foldl1 (+) [lookup (ind :. i) | i <- (map fromIntegral (A.toList indlist))]
+                foldOr :: (A.Shape sh') => Vector A.U Int -> ((sh' :. Int :. Int) -> Int8) -> (sh' :. Int) -> Bool
+                foldOr indlist lookup ind@(a :. pos) = case V.any (== pos) $ A.toUnboxed indlist of
+                                                True -> False
+                                                _ -> (foldl1 (+) [lookup (ind :. i) | i <- (map fromIntegral (A.toList indlist))]) > 0
 
 
- 
+
+
