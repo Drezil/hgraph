@@ -117,12 +117,24 @@ emptyLine a
 -- TODO: implement calculation
 --doCalculation :: Matrix Int -> B.ByteString
 doCalculation adj attr =
-        let (adj_, graph_) = preprocess adj attr {--0.8--} (A.fromListUnboxed (ix1 3) [0.5,0.5,0.5]) 2 in
+        let
+                dens = 0.7
+                omega = (A.fromListUnboxed (ix1 3) [0.5,0.5,0.5])
+                delta = 2
+                (adj_, graph_) = preprocess adj attr {--0.8--} omega delta
+        in
                 B.concat $
                         [
                                 outputArray $ trace ("After: "++ show (sumAllS adj_)++"\n") adj_,
-                                outputGraph graph_
+                                outputGraph $ L.sort $ doAll graph_ adj attr dens omega delta,
+                                outputGraph $ L.sort $ (step graph_ adj attr dens omega delta) ++ 
+                                                        (step (step graph_ adj attr dens omega delta) adj attr dens omega delta)
                         ]
+                where
+                        doAll [] _ _ _ _ _ = []
+                        doAll gs a b c d e = doAll' (step gs a b c d e) a b c d e
+                        doAll' [] _ _ _ _ _ = []
+                        doAll' gs a b c d e = gs ++ doAll' (step gs a b c d e) a b c d e
 
 -- | creates a default-formatted output with \",\" in between elements
 --   and \"\\n\" in between dimensions

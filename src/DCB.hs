@@ -29,6 +29,7 @@ import qualified Data.Array.Repa       as A
 import           Data.Array.Repa.Index
 import           Data.Either
 import           Data.Int
+import qualified Data.List             as L
 import           Data.Maybe
 import qualified Data.Vector.Unboxed   as V
 import           Debug.Trace
@@ -89,6 +90,12 @@ testDensity = 0.7::Density;
 testReq = 3 ::Int
 
 
+--TODO: Do we have to filter?
+
+step :: [Graph] -> Adj -> Attr -> Density -> MaxDivergence -> Int -> [Graph]
+step gs a b c d e = filterLayer $ concat $ map (expand a b c d e ) gs
+
+
 -- | calculates all possible additions to one Graph, yielding a list of valid expansions
 --   i.e. constraint a == Just Constraints for all returned Graphs
 expand :: Adj -> Attr -> Density -> MaxDivergence -> Int -> Graph ->  [Graph]
@@ -102,10 +109,10 @@ expand adj attr d div req g@(ind,_,_) = catMaybes $ map
 --   returned as a 'Graph'.
 preprocess :: Adj           -- ^ original adjacency matrix
            -> Attr          -- ^ table of the node’s attributes
-	       -> MaxDivergence -- ^  maximum allowed ranges of the node’s attribute
-	                        --   values to be considered as consistent
-	       -> Int           -- ^ required number of consistent attributes
-	       -> (Adj, [Graph])
+           -> MaxDivergence -- ^  maximum allowed ranges of the node’s attribute
+                            --   values to be considered as consistent
+           -> Int           -- ^ required number of consistent attributes
+           -> (Adj, [Graph])
 preprocess adj attr div req =
     let
         (Z:.nNodes:._) = A.extent adj
@@ -153,8 +160,11 @@ constraintInit attr div req i j =
     in if nrHit >= req then Just (A.computeS fulfill, constr) else Nothing
 
 -- | removes all duplicate graphs
-filterLayer :: Vector A.U Graph -> Vector A.U Graph
-filterLayer gs = undefined -- TODO
+filterLayer :: [Graph] -> [Graph]
+filterLayer gs = L.nubBy filter gs
+                where
+                        filter :: Graph -> Graph -> Bool
+                        filter (ind,_,_) (ind',_,_) = and [V.any (==i) (A.toUnboxed ind) | i <- A.toList ind']
 
 -- | Checks whether a given base 'Graph' can be extended by a single node and
 --   the resulting 'Graph' still satisfies the given attribute constraints.
@@ -209,7 +219,7 @@ addPoint adj attr d div req g@(nodes, _, dens) n =
         case constr of
              Nothing  -> Nothing
              (Just c) ->
-                case dens >= d of
+                case densNew >= d of
                      True  -> Just (A.computeS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)
                      False -> Nothing
 
