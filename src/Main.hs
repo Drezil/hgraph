@@ -17,7 +17,7 @@
 --
 -----------------------------------------------------------------------------
 
-module DCB.DCBn where
+module Main where
 
 import           DCB.DCB
 import           DCB.IO
