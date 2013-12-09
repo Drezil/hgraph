@@ -20,20 +20,23 @@ import           Util
 import           DCB.Structures
 import           DCB.IO
 
-import           Prelude               hiding ((++))
-import qualified Prelude               as P ((++))
+import           Prelude                        hiding ((++))
+import qualified Prelude                        as P ((++))
 
 import           Control.Monad.Par
-import           Data.Array.Repa       ((:.) (..), Array, (!), (*^), (++), (+^),
-                                        (-^), (/^))
-import qualified Data.Array.Repa       as A
+import           Control.Parallel.Strategies
+import           Control.Monad.Identity
+import           Control.DeepSeq
+import           Data.Array.Repa                ((:.) (..), Array, (!), (*^), (++), (+^),
+                                                (-^), (/^))
+import qualified Data.Array.Repa                as A
 import           Data.Array.Repa.Index
 import           Data.Either
 import           Data.Int
-import qualified Data.List             as L
+import qualified Data.List                      as L
 import           Data.Maybe
-import qualified Data.Vector.Unboxed   as V
-import           Debug.Trace
+import qualified Data.Vector.Unboxed            as V
+--import           Debug.Trace
 import qualified Data.ByteString.Char8          as B
 
 
@@ -62,12 +65,21 @@ testDivergence = A.fromListUnboxed (ix1 5) [3.0, 0.0, 300.0, 2.0, 10.0]
 testDensity = 0.7::Density;
 testReq = 3 ::Int
 
+force :: (A.Shape sh, V.Unbox e) => Array A.D sh e -> Array A.U sh e
+force a = runIdentity (A.computeP a) 
+
+--ignore A.U-Array in deepseq - already unboxed..
+instance (A.Shape sh, V.Unbox e) => NFData (Array A.U sh e) where
+  rnf a = ()
+  {-# INLINE rnf #-}
 
 --TODO: Do we have to filter?
 
 step :: [Graph] -> Adj -> Attr -> Density -> MaxDivergence -> Int -> [Graph]
 step gs@((ind,_,_):_) a b c d e = --trace ("step from " P.++ show (A.extent ind) ) $ 
                                   filterLayer $ concat $ map (expand a b c d e ) gs
+                                                        +|| (parBuffer 75 rdeepseq)
+                                                                 
 
 
 -- | calculates all possible additions to one Graph, yielding a list of valid expansions
@@ -90,13 +102,14 @@ preprocess :: Adj           -- ^ original adjacency matrix
            -> (Adj, [Graph])
 preprocess adj attr div req =
     let
-        (Z:.nNodes:._) = A.extent adj
-        results = map (initGraph attr div req) [(i, j) | i <- [0..(nNodes-1)], j <- [(i+1)..(nNodes-1)], adj!(ix2 i j) /= 0]
-        finalGraphs = lefts results
-        mask = A.fromUnboxed (A.extent adj) $V.replicate (nNodes*nNodes) False V.//
+        ! (Z:.nNodes:._) = A.extent adj
+        ! results = map (initGraph attr div req) [(i, j) | i <- [0..(nNodes-1)], j <- [(i+1)..(nNodes-1)], adj!(ix2 i j) /= 0]
+                      +|| (parBuffer 25 rdeepseq) 
+        ! finalGraphs = lefts results
+        ! mask = A.fromUnboxed (A.extent adj) $V.replicate (nNodes*nNodes) False V.//
                 ((map (\(i,j) -> (i*nNodes + (mod j nNodes), True)) $rights results)
                 P.++ (map (\(i,j) -> (j*nNodes + (mod i nNodes), True)) $rights results))
-        adj' = A.computeS $A.fromFunction (A.extent adj) (\sh -> if mask!sh then 0 else adj!sh)
+        ! adj' = runIdentity $ A.computeUnboxedP $A.fromFunction (A.extent adj) (\sh -> if mask!sh then 0 else adj!sh)
     in (adj', finalGraphs)
 
 -- | Initializes a seed 'Graph' if it fulfills the constraints, returns the input nodes
@@ -108,7 +121,7 @@ initGraph :: Attr                    -- ^ table of all node’s attributes
           -> Either Graph (Int, Int)
 initGraph attr div req (i, j) =
     let
-       constr = constraintInit attr div req i j
+       ! constr = constraintInit attr div req i j
     in case constr of
             Nothing -> Right (i, j)
             Just c  -> Left (A.fromListUnboxed (ix1 2) [i,j], c, 1)
@@ -119,20 +132,23 @@ constraintInit :: Attr -> MaxDivergence -> Int -- ^ required number of consisten
                -> Int -- ^ first node to test
                -> Int -- ^ second node to test first node against
                -> Maybe Constraints
-constraintInit attr div req i j =
+constraintInit ! attr ! div req i j =
     let
-        (Z:._:.nAttr) = A.extent attr
+        ! (Z:._:.nAttr) = A.extent attr
         fConstr (Z:.a:.c) =
             let
-                col = A.slice attr (A.Any:.a)
+                ! col = A.slice attr (A.Any:.a)
             in case c of
                     0 -> min (attr!(ix2 i a)) (attr!(ix2 j a))
                     1 -> max (attr!(ix2 i a)) (attr!(ix2 j a))
-        constr = A.computeS $A.fromFunction (ix2 nAttr 2) fConstr
-        fulfill = A.zipWith (\thediv dist -> if abs dist <= thediv then 1 else 0) div
-                $A.foldS (-) 0 constr
-        nrHit = A.foldAllS (+) (0::Int) $A.map fromIntegral fulfill
-    in if nrHit >= req then Just (A.computeS fulfill, constr) else Nothing
+        (constr, fulfill, nrHit) = runIdentity $
+                                        do
+                                           ! constr <- return $ A.computeUnboxedS $A.fromFunction (ix2 nAttr 2) fConstr
+                                           ! fulfill <- return $ A.computeUnboxedS $ A.zipWith (\thediv dist -> if abs dist <= thediv then 1 else 0) div
+                                                                $A.foldS (-) 0 constr
+                                           ! nrHit <- return $ A.foldAllS (+) (0::Int) $A.map fromIntegral fulfill
+                                           return (constr, fulfill, nrHit)
+    in if nrHit >= req then Just (fulfill, constr) else Nothing
 
 -- | removes all duplicate graphs
 filterLayer :: [Graph] -> [Graph]
@@ -151,16 +167,16 @@ constraint :: Attr -> MaxDivergence -> Int -- ^ required number of consistent at
 constraint attr div req (ind, (fulfill, constr), _) newNode =
     let
         --TODO: UGLY hack... this has to be somewhere .. -.-
-        posInf = read "Infinity" :: Double
-        negInf = read "-Infinity" :: Double
+        ! posInf = read "Infinity" :: Double
+        ! negInf = read "-Infinity" :: Double
         -- convert into Vector of new Indices after appending new node-index
-        totalInd = A.toUnboxed $ A.computeUnboxedS $ ind ++ A.fromListUnboxed (ix1 1) [newNode]
+        ! totalInd = A.toUnboxed $ A.computeUnboxedS $ ind ++ A.fromListUnboxed (ix1 1) [newNode]
         updateConstr :: (DIM2 -> Double) -> DIM2 -> Double
         updateConstr f sh@(Z:.i:.c) = 
             let
-                slice = A.slice attr (A.Any :. i)
-                mins = A.traverse slice id (\g sh'@(Z :. j)-> if V.any (==j) totalInd then (g sh') else posInf)
-                maxs = A.traverse slice id (\g sh'@(Z :. j)-> if V.any (==j) totalInd then (g sh') else negInf)
+                ! slice = A.slice attr (A.Any :. i)
+                ! mins = A.traverse slice id (\g sh'@(Z :. j)-> if V.any (==j) totalInd then (g sh') else posInf)
+                ! maxs = A.traverse slice id (\g sh'@(Z :. j)-> if V.any (==j) totalInd then (g sh') else negInf)
                 
             in
             -- trace (show i P.++ show (A.toList slice) P.++ show c P.++ "\n " P.++ show (A.foldAllS (max) negInf $ maxs)) $
@@ -175,7 +191,7 @@ constraint attr div req (ind, (fulfill, constr), _) newNode =
                 $A.zipWith (\thediv dist -> abs dist <= thediv) div $A.foldS (-) 0 constrNew
         ! nrHit = A.foldAllS (+) (0::Int) $A.map fromIntegral fulfillNew
     in if nrHit >= req then Just {-$ trace ("returning const-matrix for "P.++ show (A.toList ind) P.++"\n" P.++ (B.unpack $ outputArray constrNew))-}
-                                (A.computeS fulfillNew, constrNew) else Nothing
+                                (A.computeUnboxedS fulfillNew, constrNew) else Nothing
 
 -- updates the density of a graph extended by a single node
 updateDensity :: Adj            -- ^ global adjacency matrix of all nodes
@@ -225,8 +241,8 @@ addPoint :: Adj           -- ^ global adjacency matrix of all nodes
          -> Maybe Graph
 addPoint adj attr d div req g@(nodes, _, dens) n =
     let
-        constr = constraint attr div req g n
-        densNew = updateDensity adj nodes n dens
+        (! constr,! densNew) = (constraint attr div req g n,updateDensity adj nodes n dens)
+                                 -- +|| (parTuple2 rdeepseq rdeepseq) 
     in
         case constr of
              Nothing  -> Nothing
@@ -234,7 +250,7 @@ addPoint adj attr d div req g@(nodes, _, dens) n =
                 --trace (B.unpack $ outputArray constr) $
                 case densNew >= d of
                      True  -> Just {-$ trace ("submitting graph:\n================\n " P.++ (B.unpack $ outputGraph [(A.computeS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)])) -}
-                                   (A.computeS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)
+                                   (A.computeUnboxedS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)
                      False -> Nothing
 
 reduceDim :: (A.Shape sh, Integral a) => (sh :. a) -> sh
@@ -242,7 +258,7 @@ reduceDim (a :. b) = a --A.shapeOfList $ tail $ A.listOfShape a
 
 -- | yields all valid addititons (=neighbours) to a Graph
 addablePoints :: Adj -> Graph -> Vector A.U Bool
-addablePoints adj (ind,_,_) = A.computeS $
+addablePoints adj (ind,_,_) = A.computeUnboxedS $
                                         (A.traverse
                                                 adj
                                                 reduceDim
