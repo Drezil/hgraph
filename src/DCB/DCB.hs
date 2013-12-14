@@ -2,6 +2,7 @@
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE BangPatterns #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  DCB
@@ -175,6 +176,7 @@ constraint attr div req (ind, (fulfill, constr), _) newNode =
         updateConstr f sh@(Z:.i:.c) = 
             let
                 ! slice = A.slice attr (A.Any :. i)
+                -- TODO: why not compare current bounds with attribute values of new node?
                 ! mins = A.traverse slice id (\g sh'@(Z :. j)-> if V.any (==j) totalInd then (g sh') else posInf)
                 ! maxs = A.traverse slice id (\g sh'@(Z :. j)-> if V.any (==j) totalInd then (g sh') else negInf)
                 
@@ -201,7 +203,11 @@ updateDensity :: Adj            -- ^ global adjacency matrix of all nodes
               -> Density        -- ^ new density of expanded graph
 updateDensity adj nodes newNode dens =
     let
-        neighbourSlice = A.traverse 
+    
+        
+        neighbourSlice = A.map (\n -> fromIntegral $adj!(A.ix2 newNode n)) nodes
+                         {-- awefull asymptotic efficiency
+                         A.traverse 
                                     (A.slice (A.map fromIntegral adj) (A.Any :. newNode)) -- Array
                                     id                                                    -- same Size
                                     (\f sh@(_ :. i) -> 
@@ -209,6 +215,7 @@ updateDensity adj nodes newNode dens =
                                                 (f sh)                          --return connection
                                         else
                                                 0)                              --never connect to nodes not extisting
+                                    --}
         neighbours = A.foldAllS (+) (0::Int) ({- trace (show $ A.computeUnboxedS neighbourSlice)-} neighbourSlice)
                 
                 {- A.traverse adj (reduceDim) (\f (Z :. i) -> 
