@@ -1,6 +1,8 @@
 module Util where
 
 import           Control.Parallel.Strategies
+import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 -- | Move first argument to first place (for style uniformity)
 flip1 :: (a -> b) -> (a -> b)
@@ -84,3 +86,19 @@ a +|| b = a `using` b
 appendS :: (Show a) => String -> String -> a -> String
 appendS sep a b = (a ++ show b) ++ sep
 
+-- When removing duplicates, the first function assigns the input to a bucket,
+-- the second function checks whether it is already in the bucket (linear search).
+ordNubBy :: (Ord b) => (a -> b) -> (a -> a -> Bool) -> [a] -> [a]
+ordNubBy p f l = go Map.empty l
+  where
+    go _ []     = []
+    go m (x:xs) = let b = p x in case b `Map.lookup` m of
+                    Nothing     -> x : go (Map.insert b [x] m) xs
+                    Just bucket
+                      | elem_by f x bucket -> go m xs
+                      | otherwise          -> x : go (Map.insert b (x:bucket) m) xs
+
+    -- From the Data.List source code.
+    elem_by :: (a -> a -> Bool) -> a -> [a] -> Bool
+    elem_by _  _ []     = False
+    elem_by eq y (x:xs) = y `eq` x || elem_by eq y xs

@@ -47,7 +47,11 @@ instance Ord Graph where
                         s2 = (A.size $ A.extent nodes)
                 in
                         if s1 == s2 then
-                                (A.sumAllS const') `compare` (A.sumAllS const)
+                                let 
+                                        const1 = (A.sumAllS const')
+                                        const2 = (A.sumAllS const)
+                                in
+                                        const1 `compare` const2 
                         else
                                 s1 `compare` s2 
 

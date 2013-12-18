@@ -22,7 +22,8 @@ executable hgraph
                    text -any,
                    transformers >=0.3.0,
                    vector >=0.7,
-                   mtl >=2.1 && <3
+                   mtl >=2.1 && <3,
+                   containers >=0.5.0 && <0.6
     main-is: Main.hs
     buildable: True
     hs-source-dirs: src
@@ -37,9 +38,11 @@ executable hgraph
                    DoAndIfThenElse
  
 test-suite test-hgraph
-    build-depends: QuickCheck -any, Stream -any, accelerate -any,
+    build-depends: 
+                   QuickCheck -any, Stream -any, accelerate -any,
                    base -any, bytestring -any, deepseq -any, ghc -any,
-                   monad-par >=0.3.4, parallel -any, repa >=3.2, text -any
+                   monad-par >=0.3.4, parallel -any, repa >=3.2, text -any,
+                   containers >=0.5.0 && <0.6
     type: exitcode-stdio-1.0
     main-is: Main.hs
     buildable: True

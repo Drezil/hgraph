@@ -24,8 +24,8 @@ import           DCB.IO
 import           Prelude                        hiding ((++))
 import qualified Prelude                        as P ((++))
 
-import           Control.Monad.Par
-import           Control.Parallel.Strategies
+import           Control.Monad.Par              
+import           Control.Parallel.Strategies    hiding (parMap)
 import           Control.Monad.Identity
 import           Control.DeepSeq
 import           Data.Array.Repa                ((:.) (..), Array, (!), (*^), (++), (+^),
@@ -37,7 +37,7 @@ import           Data.Int
 import qualified Data.List                      as L
 import           Data.Maybe
 import qualified Data.Vector.Unboxed            as V
---import           Debug.Trace
+import           Debug.Trace
 import qualified Data.ByteString.Char8          as B
 
 
@@ -77,9 +77,9 @@ instance (A.Shape sh, V.Unbox e) => NFData (Array A.U sh e) where
 --TODO: Do we have to filter?
 
 step :: [Graph] -> Adj -> Attr -> Density -> MaxDivergence -> Int -> [Graph]
-step gs@((ind,_,_):_) a b c d e = --trace ("step from " P.++ show (A.extent ind) ) $ 
+step gs@((ind,_,_):_) a b c d e = traceEvent ("step from " P.++ show (A.extent ind) ) $ 
                                   filterLayer $ concat $ map (expand a b c d e ) gs
-                                                        +|| (parBuffer 75 rdeepseq)
+                                                        +|| (parBuffer 1000 rdeepseq)
                                                                  
 
 
@@ -103,15 +103,16 @@ preprocess :: Adj           -- ^ original adjacency matrix
            -> (Adj, [Graph])
 preprocess adj attr div req =
     let
-        ! (Z:.nNodes:._) = A.extent adj
-        ! results = map (initGraph attr div req) [(i, j) | i <- [0..(nNodes-1)], j <- [(i+1)..(nNodes-1)], adj!(ix2 i j) /= 0]
-                      +|| (parBuffer 25 rdeepseq) 
-        ! finalGraphs = lefts results
-        ! mask = A.fromUnboxed (A.extent adj) $V.replicate (nNodes*nNodes) False V.//
+        (Z:.nNodes:._) = A.extent adj
+        results = map (initGraph attr div req) [(i, j) | i <- [0..(nNodes-1)], j <- [(i+1)..(nNodes-1)], adj!(ix2 i j) /= 0]
+                       -- +|| (parBuffer 25 rdeepseq) 
+        finalGraphs = lefts results
+        mask = A.fromUnboxed (A.extent adj) $V.replicate (nNodes*nNodes) False V.//
                 ((map (\(i,j) -> (i*nNodes + (mod j nNodes), True)) $rights results)
                 P.++ (map (\(i,j) -> (j*nNodes + (mod i nNodes), True)) $rights results))
-        ! adj' = runIdentity $ A.computeUnboxedP $A.fromFunction (A.extent adj) (\sh -> if mask!sh then 0 else adj!sh)
+        adj' = runIdentity $ A.computeUnboxedP $A.fromFunction (A.extent adj) (\sh -> if mask!sh then 0 else adj!sh)
     in (adj', finalGraphs)
+                     +|| parTuple2 rdeepseq rseq
 
 -- | Initializes a seed 'Graph' if it fulfills the constraints, returns the input nodes
 --   otherwise. It is assumed that the given nodes are connected.
@@ -137,13 +138,11 @@ constraintInit ! attr ! div req i j =
     let
         ! (Z:._:.nAttr) = A.extent attr
         fConstr (Z:.a:.c) =
-            let
-                ! col = A.slice attr (A.Any:.a)
-            in case c of
+            case c of
                     0 -> min (attr!(ix2 i a)) (attr!(ix2 j a))
                     1 -> max (attr!(ix2 i a)) (attr!(ix2 j a))
-        (constr, fulfill, nrHit) = runIdentity $
-                                        do
+        (!constr, !fulfill, !nrHit) = runIdentity $
+                                       do
                                            ! constr <- return $ A.computeUnboxedS $A.fromFunction (ix2 nAttr 2) fConstr
                                            ! fulfill <- return $ A.computeUnboxedS $ A.zipWith (\thediv dist -> if abs dist <= thediv then 1 else 0) div
                                                                 $A.foldS (-) 0 constr
@@ -152,8 +151,12 @@ constraintInit ! attr ! div req i j =
     in if nrHit >= req then Just (fulfill, constr) else Nothing
 
 -- | removes all duplicate graphs
+
+-- nub has O(n^2) complexity.
+-- with this variant of ordNubBy we need a simple bucket-extractor (first function) obeying Ord
+-- and a second equality-check function for edge-cases (lin-search).
 filterLayer :: [Graph] -> [Graph]
-filterLayer gs = L.nubBy filter gs
+filterLayer gs = ordNubBy (\g@(ind,_,_) -> L.sort (A.toList ind)) filter gs
                 where
                         filter :: Graph -> Graph -> Bool
                         filter (ind,_,_) (ind',_,_) = and [V.any (==i) (A.toUnboxed ind) | i <- A.toList ind']
@@ -223,8 +226,8 @@ updateDensity adj nodes newNode dens =
                                         fromIntegral $adj!(ix2 i newNode) 
                                    else
                                         0)-}
-        (Z:.n') = A.extent nodes
-        n = fromIntegral n'
+        ! (Z:.n') = A.extent nodes
+        ! n = fromIntegral n'
         newdens = (dens * ((n)*(n-1)) / 2 + fromIntegral neighbours) * 2 / ((n+1)*(n)) 
     in newdens
         {-+ trace (
