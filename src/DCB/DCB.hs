@@ -248,17 +248,18 @@ addPoint :: Adj           -- ^ global adjacency matrix of all nodes
          -> Maybe Graph
 addPoint adj attr d div req g@(nodes, _, dens) n =
     let
-        (! constr,! densNew) = (constraint attr div req g n,updateDensity adj nodes n dens)
+        (constr, densNew) = (constraint attr div req g n,updateDensity adj nodes n dens)
                                  -- +|| (parTuple2 rdeepseq rdeepseq) 
     in
-        case constr of
-             Nothing  -> Nothing
-             (Just c@(ful,constr)) ->
-                --trace (B.unpack $ outputArray constr) $
-                case densNew >= d of
-                     True  -> Just {-$ trace ("submitting graph:\n================\n " P.++ (B.unpack $ outputGraph [(A.computeS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)])) -}
+        case densNew >= d of
+                False -> Nothing
+                True -> 
+                        case constr of
+                             Nothing  -> Nothing
+                             (Just c@(ful,constr)) ->
+                                --trace (B.unpack $ outputArray constr) $
+                                Just {-$ trace ("submitting graph:\n================\n " P.++ (B.unpack $ outputGraph [(A.computeS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)])) -}
                                    (A.computeUnboxedS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)
-                     False -> Nothing
 
 reduceDim :: (A.Shape sh, Integral a) => (sh :. a) -> sh
 reduceDim (a :. b) = a --A.shapeOfList $ tail $ A.listOfShape a
