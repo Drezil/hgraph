@@ -170,25 +170,13 @@ constraint :: Attr -> MaxDivergence -> Int -- ^ required number of consistent at
            -> Maybe Constraints
 constraint attr div req (ind, (fulfill, constr), _) newNode =
     let
-        --TODO: UGLY hack... this has to be somewhere .. -.-
-        ! posInf = read "Infinity" :: Double
-        ! negInf = read "-Infinity" :: Double
-        -- convert into Vector of new Indices after appending new node-index
-        ! totalInd = A.toUnboxed $ A.computeUnboxedS $ ind ++ A.fromListUnboxed (ix1 1) [newNode]
+        -- attribute matrix row of node to add
+        ! attrSlice = A.slice attr (A.Any :. newNode :. A.All) 
         updateConstr :: (DIM2 -> Double) -> DIM2 -> Double
-        updateConstr f sh@(Z:.i:.c) = 
-            let
-                ! slice = A.slice attr (A.Any :. i)
-                -- TODO: why not compare current bounds with attribute values of new node?
-                ! mins = A.traverse slice id (\g sh'@(Z :. j)-> if V.any (==j) totalInd then (g sh') else posInf)
-                ! maxs = A.traverse slice id (\g sh'@(Z :. j)-> if V.any (==j) totalInd then (g sh') else negInf)
-                
-            in
-            -- trace (show i P.++ show (A.toList slice) P.++ show c P.++ "\n " P.++ show (A.foldAllS (max) negInf $ maxs)) $
+        updateConstr f sh@(Z:.i:.c) =
             case c of
-                 0 -> A.foldAllS (min) posInf mins
-                 1 -> A.foldAllS (max) negInf maxs
-                 _ -> error "attr wrong"
+                 0 -> min (f sh) (attrSlice!(A.ix1 i))
+                 1 -> max (f sh) (attrSlice!(A.ix1 i)) 
         ! constrNew = A.computeUnboxedS $ A.traverse constr id updateConstr
         
         --fulfill is borked..
@@ -198,7 +186,7 @@ constraint attr div req (ind, (fulfill, constr), _) newNode =
     in if nrHit >= req then Just {-$ trace ("returning const-matrix for "P.++ show (A.toList ind) P.++"\n" P.++ (B.unpack $ outputArray constrNew))-}
                                 (A.computeUnboxedS fulfillNew, constrNew) else Nothing
 
--- updates the density of a graph extended by a single node
+-- | Updates the density of a graph extended by a single node
 updateDensity :: Adj            -- ^ global adjacency matrix of all nodes
               -> Vector A.U Int -- ^ nodes of the base graph
               -> Int            -- ^ node to extend the graph by
@@ -206,19 +194,7 @@ updateDensity :: Adj            -- ^ global adjacency matrix of all nodes
               -> Density        -- ^ new density of expanded graph
 updateDensity adj nodes newNode dens =
     let
-    
-        
         neighbourSlice = A.map (\n -> fromIntegral $adj!(A.ix2 newNode n)) nodes
-                         {-- awefull asymptotic efficiency
-                         A.traverse 
-                                    (A.slice (A.map fromIntegral adj) (A.Any :. newNode)) -- Array
-                                    id                                                    -- same Size
-                                    (\f sh@(_ :. i) -> 
-                                        if V.any (==i) (A.toUnboxed nodes) then --if connected to graph
-                                                (f sh)                          --return connection
-                                        else
-                                                0)                              --never connect to nodes not extisting
-                                    --}
         neighbours = A.foldAllS (+) (0::Int) ({- trace (show $ A.computeUnboxedS neighbourSlice)-} neighbourSlice)
                 
                 {- A.traverse adj (reduceDim) (\f (Z :. i) -> 
