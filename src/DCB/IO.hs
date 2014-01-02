@@ -40,10 +40,32 @@ _outputArray a itt lt = B.concat $
                         | sj-1 == j = show (a!(ix2 i j))  -- no "," for last one..
                         | otherwise = show (a!(ix2 i j)) ++ itt ++ (_outputArray'' shape i (j+1) a itt)
 
+-- | creates a default-formatted output with \",\" in between elements
+--   and \"\\n\" in between dimensions
+--
+--   calls '_outputArray' with preset properties
 outputGraph :: [Graph] -> B.ByteString
 outputGraph gs = B.concat $ L.map (flipto3 _outputGraph "," "\n") (L.sort gs)
                                         +|| (parBuffer 25 rseq) --run parallel
 
+-- | creates a formatted output from a Graph
+--
+--   * First String is the between-element-separator
+--
+--   * Second String is the between-dimensions-separator
+--
+--   Example Output with \",\" and \"\\n\":
+--
+--   > Density: 
+--   > 0.7619047619047619
+--   > Indices used:
+--   > 28,71,78,81,100,349,401,
+--   > Attribute-Dimensions satisfied:
+--   > 0,0,1,0,1,1,
+--   > Matrix [6,2]
+--   > 28.0    3.0     1.0     551.0   0.0     10.0
+--   > 401.0   67.0    4.0     2524.0  5.0     19.0
+--
 _outputGraph :: Graph -> String -> String -> B.ByteString
 _outputGraph (indices, (constdim, constmat), dens) itt lt =
                                     let

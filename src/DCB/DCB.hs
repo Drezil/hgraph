@@ -76,6 +76,9 @@ instance (A.Shape sh, V.Unbox e) => NFData (Array A.U sh e) where
 
 --TODO: Do we have to filter?
 
+-- | creates a step in iteration.
+--   Basically calls expand for every Graph left in our List of interesting Graphs
+--   and returns the expanded ones.
 step :: [Graph] -> Adj -> Attr -> Density -> MaxDivergence -> Int -> [Graph]
 step gs@((ind,_,_):_) a b c d e = traceEvent ("step from " P.++ show (A.extent ind) ) $ 
                                   filterLayer $ concat $ map (expand a b c d e ) gs
@@ -183,7 +186,7 @@ constraint attr div req (ind, (fulfill, constr), _) newNode =
         ! fulfillNew = A.zipWith (\i b -> if i == 1 && b then 1::Int else 0::Int) fulfill
                 $A.zipWith (\thediv dist -> abs dist <= thediv) div $A.foldS (-) 0 constrNew
         ! nrHit = A.foldAllS (+) (0::Int) $A.map fromIntegral fulfillNew
-    in if nrHit >= req then Just {-$ trace ("returning const-matrix for "P.++ show (A.toList ind) P.++"\n" P.++ (B.unpack $ outputArray constrNew))-}
+    in if nrHit >= req then Just
                                 (A.computeUnboxedS fulfillNew, constrNew) else Nothing
 
 -- | Updates the density of a graph extended by a single node
@@ -196,17 +199,11 @@ updateDensity adj nodes newNode dens =
     let
         neighbourSlice = A.map (\n -> fromIntegral $adj!(A.ix2 newNode n)) nodes
         neighbours = A.foldAllS (+) (0::Int) ({- trace (show $ A.computeUnboxedS neighbourSlice)-} neighbourSlice)
-                
-                {- A.traverse adj (reduceDim) (\f (Z :. i) -> 
-                                if not $ V.any (==i) $ A.toUnboxed nodes then
-                                        fromIntegral $adj!(ix2 i newNode) 
-                                   else
-                                        0)-}
         ! (Z:.n') = A.extent nodes
         ! n = fromIntegral n'
         newdens = (dens * ((n)*(n-1)) / 2 + fromIntegral neighbours) * 2 / ((n+1)*(n)) 
     in newdens
-        {-+ trace (
+        {- + trace (
                 (show dens) P.++ " ("P.++(show (dens * (n*(n-1)) / 2)) P.++"/"P.++ (show ((n*(n-1))/(2::Double))) P.++ ") -> "
                 P.++ (show newdens) P.++ " ("P.++(show (newdens * ((n)*(n+1)) / 2)) P.++"/"P.++ (show (((n)*(n+1))/(2::Double))) P.++ ") \n"
                 P.++ (show newNode) 
@@ -237,7 +234,7 @@ addPoint adj attr d div req g@(nodes, _, dens) n =
                              Nothing  -> Nothing
                              (Just c@(ful,constr)) ->
                                 --trace (B.unpack $ outputArray constr) $
-                                Just {-$ trace ("submitting graph:\n================\n " P.++ (B.unpack $ outputGraph [(A.computeS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)])) -}
+                                Just
                                    (A.computeUnboxedS $nodes ++ A.fromListUnboxed (ix1 1) [n], c, densNew)
 
 reduceDim :: (A.Shape sh, Integral a) => (sh :. a) -> sh
