@@ -86,8 +86,28 @@ a +|| b = a `using` b
 appendS :: (Show a) => String -> String -> a -> String
 appendS sep a b = (a ++ show b) ++ sep
 
+-- I thought I needed those function... Whe I realised my mistake I
+-- did not want to remove them again ;-(
+-- | Removes repetitions from a list. An element is only considered a
+--   duplication if it equals the previous element. Special case of
+--   'remDupsBy' with fixed '==' function.
+remDups :: (Eq a) => [a] -> [a]
+remDups l = remDupsBy (==) l 
+
+-- | Removes repetitions from a list. An element is only considered a
+--   duplication if it equals the previous element.
+remDupsBy :: (Eq a) => (a -> a -> Bool) -> [a] -> [a]
+remDupsBy f [] = []
+remDupsBy f (l:ls) = l:(remDups' l ls)
+    where remDups' l [] = []
+          remDups' prev (l:ls) = case f prev l of
+                                        True  -> remDups' prev ls
+                                        False -> l:(remDups' l ls) 
+
 -- When removing duplicates, the first function assigns the input to a bucket,
 -- the second function checks whether it is already in the bucket (linear search).
+-- | /O(n^2)/ Removes duplicate elements from a list. Performs better than
+--   'Prelude.nub' by exploiting features of the 'Ord' class.
 ordNubBy :: (Ord b) => (a -> b) -> (a -> a -> Bool) -> [a] -> [a]
 ordNubBy p f l = go Map.empty l
   where

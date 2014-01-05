@@ -20,6 +20,7 @@
 module Main where
 
 import           DCB.DCB
+import           DCB.Structures
 import           DCB.IO
 import           Util
 
@@ -47,6 +48,11 @@ import           System.Environment
 import           System.Exit                    (exitFailure, exitSuccess)
 import           Test.QuickCheck.All            (quickCheckAll)
 
+
+data Params = Params { density :: Double
+                     , matches :: Int
+                     , range   :: [Double]
+                     } deriving (Show)
 
 -- | Parses the graph
 --   a graph consists of NxN chars layouted like
@@ -108,6 +114,50 @@ createAttr (!input) = createAttr' (T.split (=='\t') input) (Left [])
                                   Left rs -> Left (this : rs)
                                   _ -> next))
 
+createParams :: Char -> [T.Text] -> Either Params T.Text
+createParams delim t =
+  if length t < 3 then
+     Right $ T.pack "parsing parameter file: less parameters than expected"
+  else
+    let
+        -- parse (=reads) successful if String is empty, otherwise error
+        densLine = head t
+        matchLine = head $ tail t
+        rangeLine = head $ drop 2 t
+        densR = reads (T.unpack $ densLine) :: [(Double, String)]
+        matchR = reads (T.unpack $ matchLine) :: [(Int, String)]
+    in  -- general test of input
+        if (L.length t > 3 && T.empty /= (T.concat $ drop 3 t)) then
+            Right $T.pack "parsing parameter file: more parameter lines than expected"
+        else
+            -- test density part
+            case not (L.null densR) && L.null (snd $ head densR) && not (isNaN $ fst $ head densR) of
+                True ->
+                    -- test match part 
+                    case matchR of -- parse successful
+                        [(m, "")] ->
+                            let
+                                range = parseRange $ rangeLine
+                                errors = rights range
+                            in
+                                -- test and parse range line
+                                -- some "rights" may be empty entries, they can be ignored  
+                                case T.null (T.concat errors) of
+                                    True  -> Left $ Params (fst $ head densR) m (lefts range)
+                                    False -> Right $ T.append (T.pack "parsing parameter file: cannot parse ") (T.concat errors)
+                        _ -> Right $ T.append (T.pack ("parsing parameter file: cannot parse ")) $ T.append matchLine $ T.pack "::Int"
+                False -> Right $ T.append (T.pack ("parsing parameter file: cannot parse ")) $ T.append densLine $ T.pack "::Double"
+     where
+        -- parses the line of attribute ranges
+        parseRange :: T.Text -> [Either Double T.Text]
+        parseRange t = L.map parseRange' (T.split (== delim) t)
+        -- parses each number in line seperated by 'delim'
+        parseRange' s = case reads (T.unpack s) :: [(Double, String)] of
+                             [(d,"")] -> Left d
+                             -- empty entries caused by duplicated delimiter are ignored
+                             _ -> Right (if T.null s then T.empty
+                                         else T.append (T.pack ("cannot parse ")) $ T.append s $ T.pack "::Double,")
+
 -- | checks if a given Text is empty (Empty String, whitespaces)
 emptyLine :: T.Text -> Bool
 emptyLine a
@@ -115,13 +165,13 @@ emptyLine a
     | T.all isSpace a = True
     | otherwise       = False
 
--- TODO: implement calculation
---doCalculation :: Matrix Int -> B.ByteString
-doCalculation adj attr =
+doCalculation :: Adj -> Attr -> Params -> B.ByteString
+doCalculation adj attr p =
         let
-                dens = 0.75
-                omega = (A.fromListUnboxed (ix1 6) [0,5,3,300,5,10])
-                delta = 2
+                dens = density p --0.75
+                nAttr = length (range p)
+                omega = A.fromListUnboxed (ix1 nAttr) (range p) --(A.fromListUnboxed (ix1 6) [0,5,3,300,5,10])
+                delta = matches p --2
                 (adj_, graph_) = preprocess adj attr {--0.8--} omega delta
         in
                 B.concat $
@@ -178,18 +228,19 @@ debug a = return () --putStrLn a
 
 -- | The main-function to bootstrap our application
 main = do
---    args <- getArgs
---    input <- case args of
---            ["--help"] -> showHelp
+    args <- getArgs
+    input <- case args of
+            [] -> Prelude.mapM B.readFile ["sampledata.adj","sampledata.adj.atr","sampledata.p"] 
+--            ["--help"] -> showHelp -- TODO: implement help display
 --            ["-h"] -> showHelp
---            [] -> error "Error: Wrong number of Arguments given. Try --help for more information."
---            [adj, attr] -> Prelude.mapM B.readFile [adj, attr]
---            _ -> error "Wrong arguments given"
-    input <- Prelude.mapM B.readFile ["sampledata.adj","sampledata.adj.atr"]
+            [adj, attr, params] -> Prelude.mapM B.readFile [adj, attr, params]
+            _ -> error "Error: Wrong number of Arguments given. Try --help for more information."
+
     -- read file and clean
     adjMat <- return $ L.filter (not . emptyLine) (T.lines (decodeUtf8 (head input)))
     attrMat <- return $ L.filter (not . emptyLine) (T.lines (decodeUtf8 ((head . L.tail) input)))
-
+    paramRef <- return $ L.filter (not . emptyLine) (T.lines (decodeUtf8 ((head . L.tail . L.tail) input)))
+    
     adjLines <- return $ length adjMat
     attrLines <- return $ length attrMat
 
@@ -197,6 +248,7 @@ main = do
                                         -- +|| (parBuffer 25 rseq) --run parallel, evaluate fully
     unrefined_attr <- return $ (L.map (createAttr) attrMat)
                                         -- +|| (parBuffer 25 rseq) --run parallel, evaluate fully
+    paramsFinal <- return $ createParams '\t' paramRef
     adjNum <- return $ getLength (head unrefined_graph)
     attrNum <- return $ getLength (head unrefined_attr)
     debug $ show (adjLines, attrLines, attrNum)
@@ -206,6 +258,7 @@ main = do
     -- parser-errors
     checkError $ T.intercalate (T.singleton '\n') (rights unrefined_graph)
     checkError $ T.intercalate (T.singleton '\n') (rights unrefined_attr)
+    checkError $ either (\a -> T.empty) (\b -> b) $ paramsFinal
     -- attribute-errors
     if adjLines /= attrLines then
         checkError $ T.pack $ "Adjacency-Matrix size "++ show adjLines ++
@@ -228,9 +281,7 @@ main = do
     ----- CALCULATE & OUTPUT
 
     --debug $ "Before: " ++ show (sumAllS graph)
-    B.putStr $ doCalculation graph attr
-
-    
+    B.putStr $ doCalculation graph attr $ (\(Left a) -> a) paramsFinal
     
     
 {---TIMINGS
