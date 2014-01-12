@@ -10,10 +10,11 @@ data-dir: ""
 executable hgraph
     build-depends: 
                    QuickCheck -any,
-                   base -any,
                    bytestring -any,
+                   bytestring-lexing -any,
                    deepseq -any,
                    ghc -any,
+                   time >=1.2,
                    monad-par >=0.3.4,
                    parallel -any,
                    repa >=3.2,
@@ -37,8 +38,8 @@ executable hgraph
  
 test-suite test-hgraph
     build-depends: 
-                   QuickCheck -any,
-                   base -any, bytestring -any, deepseq -any, ghc -any,
+                   QuickCheck -any, bytestring -any, bytestring-lexing -any,
+                   deepseq -any, ghc -any, time >=1.2,
                    monad-par >=0.3.4, parallel -any, repa >=3.2,
                    containers >=0.5.0 && <0.6,
                    base >=4.6.0 && <4.7
