@@ -211,9 +211,9 @@ main = do
     paramRef <- return $ L.filter (not . emptyLine) (B.lines (head $ tail $ tail input))
    
 
-    unrefined_graph <- return $ (L.map (parseAdjMat) adjMat)
+    unrefined_graph <- return $!! (L.map (parseAdjMat) adjMat)
                                         -- +|| (parBuffer 25 rseq) --run parallel, evaluate fully
-    unrefined_attr <- return $ (L.map (parseAttr '\t') attrMat)
+    unrefined_attr <- return $!! (L.map (parseAttr '\t') attrMat)
                                         -- +|| (parBuffer 25 rseq) --run parallel, evaluate fully
     paramsParsed <- return $ parseParams '\t' paramRef
     
@@ -254,9 +254,9 @@ main = do
     else return ()
 
     ----- EXTRACT MATRICES
-    graph <- return $!! A.fromListUnboxed (Z :. adjLines :. adjLines) (L.foldl1 (++) (lefts unrefined_graph)) -- concatenated graph
+    graph <- return $ A.fromListUnboxed (Z :. adjLines :. adjLines) (L.foldl1 (++) (lefts unrefined_graph)) -- concatenated graph
 
-    attr <- return $!! A.fromListUnboxed (Z :. attrLines :. attrNum) (L.foldl1 (++) (lefts unrefined_attr)) -- concatenated attr
+    attr <- return $ A.fromListUnboxed (Z :. attrLines :. attrNum) (L.foldl1 (++) (lefts unrefined_attr)) -- concatenated attr
     timeEndParse <- getCPUTime
 
     ----- CALCULATE & OUTPUT
