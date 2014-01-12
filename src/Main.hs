@@ -58,10 +58,9 @@ data Params = Params { density :: Double
 
 instance NFData Params
 
--- What could be improved: In case of an error the full ByteString is reduced nonetheless because of
--- the use of fold. It would be better to be able to skip the parsing when an error occurs.
+
 -- | Parses a row of the adjacency matrix of a graph. The consistancy of line lengths is not tested 
---   by this function! In case of a successfull parse a 'Left [a]' is returned, otherwise a
+--   by this function! In case of a successfull parse a 'Left' ('Vector' a) is returned, otherwise a
 --   'Right ByteString' containing an error message.
 --   > 10101
 --   > 01010
@@ -69,22 +68,31 @@ instance NFData Params
 --   > 01010
 --   > 10101
 --   
---    * whitespace in between is ignored (including '\\t', '\\n' and '\\r')
---    * Valid Values: '0', '1'
---    * any invalid value which is not a whitespace character raises an error
-parseAdjMat :: (Integral a) => ByteString -> Either [a] ByteString
-parseAdjMat input = B.foldr' foldf (Left []) input -- important to use *right* fold to keep ordering
-    where --foldf :: Char -> Either [a] ByteString -> Either [a] ByteString
-          foldf _ (r@(Right _)) = r
-          foldf c (l@(Left row)) =
-              case c of
-                   '0' -> Left $! 0:row
-                   '1' -> Left $! 1:row
-                   _   -> if isSpace c then l else Right (B.pack $ "(adjacency)cannot parse '" ++ c:"'")
+--    * Valid Values: @0@, @1@
+--    * any invalid value raises an error
+parseAdjMat :: (Num a, Unbox a) => ByteString -> Either (V.Vector a) ByteString
+parseAdjMat input =
+    let
+        size = B.length input
+        result = V.unfoldrN size parseAdjMat' input
+    in
+        if size == V.length result then Left result
+                            else Right $ B.append (B.pack "(adjecency)cannot parse ") input
+  where
+    --parseAdjMat' :: ByteString -> Maybe (a, ByteString)
+    parseAdjMat' input =
+        let c = B.head input in
+        case c of
+             '0' -> Just (0, B.tail input)
+             '1' -> Just (1, B.tail input)
+             _   -> if isSpace c then parseAdjMat' (B.tail input)
+                                 else Nothing
 
+-- | Tests if a parse result is considered valid.
+testParse :: Maybe (a, ByteString) -> Maybe a
+testParse Nothing = Nothing
+testParse (Just (a, rem)) = if emptyLine rem then Just a else Nothing
 
--- What could be improved: In case of an error the full ByteString is reduced nonetheless because of
--- the use of fold. It would be better to be able to skip the parsing when an error occurs.
 -- | Parses a row of the attribute matrix of a graph. The consistancy of line lengths is not tested 
 --   by this function! In case of a successfull parse a 'Left [a]' is returned, otherwise a
 --   'Right ByteString' containing an error message.
@@ -94,27 +102,8 @@ parseAdjMat input = B.foldr' foldf (Left []) input -- important to use *right* f
 --   > 2.2   -3e-4
 --   > 3     2.3
 --
---   * Valid: Doubles
---   * whitespace between two values is ignored
---   * any invalid value which is not a whitespace character raises an error
-{--
-parseAttr :: Char -> ByteString -> Either [Double] ByteString
-parseAttr delim input
-  | B.null input = Left []
-  | B.head input == delim = parseAttr delim (B.tail input)
-  | otherwise =
-    case B.readDouble input of
-         Just (d, rem) -> case parseAttr delim rem of
-                               Left l -> Left $! d:l
-                               r      -> r
-         _             -> if B.head input == '\r' && B.length input == 1 then Left []
-                          else Right $ B.append (B.pack "(attr)cannot parse ") input
---}
-
-testParse :: Maybe (a, ByteString) -> Maybe a
-testParse Nothing = Nothing
-testParse (Just (a, rem)) = if emptyLine rem then Just a else Nothing
-
+--   * Valid: Doubles divided by specified delimter
+--   * any invalid value raises an error
 parseAttr :: Char -> ByteString -> Either [Double] ByteString
 parseAttr delim input = parseAttr' (B.split delim input)
     where parseAttr' :: [ByteString] -> Either [Double] ByteString
@@ -126,6 +115,10 @@ parseAttr delim input = parseAttr' (B.split delim input)
                    _      -> Right $ B.append (B.pack "(attr)cannot parse ") row
           parseAttr' [] = Left []
 
+-- | Parses parameter file.
+--   First line: Density (Double)
+--   Second line: requied matches (Int)
+--   Third line is the tolerance for each attribute (Double values)
 parseParams :: Char -> [ByteString] -> Either Params ByteString
 parseParams delim input
   | length input /= 3 = Right $ B.pack ("(params)amount of lines does not match (expected 3, got "
@@ -172,13 +165,19 @@ doCalculation adj attr p =
                         doAll' [] _ _ _ _ _ = []
                         doAll' gs a b c d e = gs ++ doAll' (step gs a b c d e) a b c d e
 
--- | gets the length of the Left a.
+-- | gets the length of the 'Left a'.
 --
---   0 if Left a empty or no valid constructor.
+--   @0@ if Left a empty or no valid constructor.
 getLength :: Either [a] b -> Int
 getLength (Left a) = length a
 getLength (Right _) = 0
 
+-- | gets the length of the Left ('Vector a').
+--
+--   @0@ if Left a empty or no valid constructor.
+getLengthV :: (Unbox a) => Either (V.Vector a) b -> Int
+getLengthV (Left a) = V.length a
+getLengthV (Right _) = 0
 
 -- | prints the Help and exits
 showHelp :: IO ()
@@ -209,6 +208,12 @@ checkError a
 --   changed to return () to disable Debug.
 debug a = return () --putStrLn a
 
+-- | Removes one trailing carriage return character @\\r@ if existant.
+removeCarriageReturn :: ByteString -> ByteString
+removeCarriageReturn input =
+    if B.last input == '\r' then B.init input
+                            else input
+
 
 -- | The main-function to bootstrap our application
 main = do
@@ -222,9 +227,9 @@ main = do
             _ -> error "Error: Wrong number of Arguments given. Try --help for more information."
 
     -- read file and clean
-    adjMat <- return $ L.filter (not . emptyLine) (B.lines (head input))
-    attrMat <- return $ L.filter (not . emptyLine) (B.lines (head $ tail input))
-    paramRef <- return $ L.filter (not . emptyLine) (B.lines (head $ tail $ tail input))
+    adjMat <- return $ L.map removeCarriageReturn $ L.filter (not . emptyLine) (B.lines (head input))
+    attrMat <- return $ L.map removeCarriageReturn $ L.filter (not . emptyLine) (B.lines (head $ tail input))
+    paramRef <- return $ L.map removeCarriageReturn $ L.filter (not . emptyLine) (B.lines (head $ tail $ tail input))
    
 
     unrefined_graph <- return $ (L.map (parseAdjMat) adjMat)
@@ -235,7 +240,7 @@ main = do
     
     adjLines <- return $ length adjMat
     attrLines <- return $ length attrMat
-    adjNum <- return $ getLength (head unrefined_graph)
+    adjNum <- return $ getLengthV (head unrefined_graph)
     attrNum <- return $ getLength (head unrefined_attr)
     debug $ show (adjLines, attrLines, attrNum)
 
@@ -270,13 +275,20 @@ main = do
     else return ()
 
     ----- EXTRACT MATRICES
-    graph <- return $ A.fromListUnboxed (Z :. adjLines :. adjLines) (L.foldl1 (++) (lefts unrefined_graph)) -- concatenated graph
+    graph <- return $ A.fromUnboxed (Z :. adjLines :. adjLines) (V.concat (lefts unrefined_graph)) -- concatenated graph
 
     attr <- return $ A.fromListUnboxed (Z :. attrLines :. attrNum) (L.foldl1 (++) (lefts unrefined_attr)) -- concatenated attr
     
+    --t1 <- getCurrentTime
     evaluate graph
+    --t2 <- getCurrentTime
+    --putStrLn ("graph: " ++ show (diffUTCTime t2 t1))
     evaluate attr
+    --t3 <- getCurrentTime
+    --putStrLn ("attr: " ++ show (diffUTCTime t3 t2))
     evaluate paramsFinal
+    --t4 <- getCurrentTime
+    --putStrLn ("param: " ++ show (diffUTCTime t4 t3))
     timeEndParse <- getCurrentTime
 
     ----- CALCULATE & OUTPUT
@@ -286,8 +298,8 @@ main = do
     calculation <- return $!! doCalculation graph attr paramsFinal
     timeEndCalc <- getCurrentTime
     B.putStr calculation
-    putStrLn ("read/parse CPU time: " ++ show (diffUTCTime timeEndParse timeStartProg) ++ "s")
-    putStrLn ("calculation CPU time: " ++ show (diffUTCTime  timeEndCalc timeStartCalc) ++ "s")
+    putStrLn ("read/parse CPU time: " ++ show (diffUTCTime timeEndParse timeStartProg))
+    putStrLn ("calculation CPU time: " ++ show (diffUTCTime  timeEndCalc timeStartCalc))
     
 {---TIMINGS
 
