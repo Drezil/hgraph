@@ -10,8 +10,6 @@ data-dir: ""
 executable hgraph
     build-depends: 
                    QuickCheck -any,
-                   Stream -any,
-                   accelerate -any,
                    base -any,
                    bytestring -any,
                    deepseq -any,
@@ -19,11 +17,11 @@ executable hgraph
                    monad-par >=0.3.4,
                    parallel -any,
                    repa >=3.2,
-                   text -any,
                    transformers >=0.3.0,
                    vector >=0.7,
                    mtl >=2.1 && <3,
-                   containers >=0.5.0 && <0.6
+                   containers >=0.5.0 && <0.6,
+                   base >=4.6.0 && <4.7
     main-is: Main.hs
     buildable: True
     hs-source-dirs: src
@@ -39,10 +37,11 @@ executable hgraph
  
 test-suite test-hgraph
     build-depends: 
-                   QuickCheck -any, Stream -any, accelerate -any,
+                   QuickCheck -any,
                    base -any, bytestring -any, deepseq -any, ghc -any,
-                   monad-par >=0.3.4, parallel -any, repa >=3.2, text -any,
-                   containers >=0.5.0 && <0.6
+                   monad-par >=0.3.4, parallel -any, repa >=3.2,
+                   containers >=0.5.0 && <0.6,
+                   base >=4.6.0 && <4.7
     type: exitcode-stdio-1.0
     main-is: Main.hs
     buildable: True

@@ -86,7 +86,7 @@ a +|| b = a `using` b
 appendS :: (Show a) => String -> String -> a -> String
 appendS sep a b = (a ++ show b) ++ sep
 
--- I thought I needed those function... Whe I realised my mistake I
+-- I thought I needed those function... When I realised my mistake I
 -- did not want to remove them again ;-(
 -- | Removes repetitions from a list. An element is only considered a
 --   duplication if it equals the previous element. Special case of
@@ -122,3 +122,17 @@ ordNubBy p f l = go Map.empty l
     elem_by :: (a -> a -> Bool) -> a -> [a] -> Bool
     elem_by _  _ []     = False
     elem_by eq y (x:xs) = y `eq` x || elem_by eq y xs
+
+
+-- | Returns weather a string only contains whitespace or not.
+isWhitespace :: String -> Bool
+isWhitespace "" = True
+isWhitespace (a:as) = (a `elem` " \r\n\t") && isWhitespace as
+
+-- | Tests whether an 'Either' type is 'Left'.
+isLeft :: Either a b -> Bool
+isLeft a = case a of Left _ -> True; _ -> False
+
+-- | Tests whether an 'Either' type is 'Right'.    
+isRight :: Either a b -> Bool
+isRight = not . isLeft

@@ -28,7 +28,8 @@ import           Control.DeepSeq
 import           Control.Monad                  (unless)
 import           Control.Monad.Par.Scheds.Trace
 import           Control.Parallel.Strategies
-import           Data.Array.Repa                as A hiding ((++))
+import qualified Data.Array.Repa                as A hiding ((++))
+import           Data.Array.Repa.Index
 import           Data.Array.Repa.Eval           (Elt)
 import           Data.Array.Repa.Repr.Unboxed
 import           Data.Array.Repa.Repr.Vector
@@ -39,132 +40,99 @@ import           Data.Either                    (lefts, rights)
 import           Data.Functor.Identity
 import           Data.Int
 import qualified Data.List                      as L
-import qualified Data.Stream                    as S
-import qualified Data.Text                      as T
-import           Data.Text.Encoding
 import qualified Data.Vector.Unboxed            as V
 --import           Debug.Trace
+import           System.CPUTime
 import           System.Environment
 import           System.Exit                    (exitFailure, exitSuccess)
-import           Test.QuickCheck.All            (quickCheckAll)
+--import           Test.QuickCheck.All            (quickCheckAll)
 
 
 data Params = Params { density :: Double
                      , matches :: Int
                      , range   :: [Double]
-                     } deriving (Show)
+                     } deriving (Show,Eq)
 
--- | Parses the graph
---   a graph consists of NxN chars layouted like
---
---  > 10101
---  > 01010
---  > 00100
---  > 01010
---  > 10101
---
---    * Valid Chars: 0, 1, \\n
---
---    * Invalid: \\r
+instance NFData Params
 
-createGraph :: (Elt a, Integral a) => T.Text -> Either [a] T.Text
-createGraph (!input) = createGraph' input (Left [])
-    where
-        createGraph' :: (Elt a, Integral a) => T.Text -> Either [a] T.Text -> Either [a] T.Text
-        createGraph' a r
-            | T.null a = r
-            | otherwise =
-                    case T.head a of
-                        '0' -> createGraph'' 0 (T.tail a) r
-                        '1' -> createGraph'' 1 (T.tail a) r
-                        _   -> Right $ T.append (T.pack "cannot parse ") a
-                        -- call recursion as last resort -> ensure not much happens on the heap
-                        where
-                            createGraph'' :: (Elt a, Integral a) => a -> T.Text -> Either [a] T.Text -> Either [a] T.Text
-                            createGraph'' x cs r =
-                                case createGraph' cs r of
-                                    Left xs -> Left (x:xs)
-                                    Right errstr ->
-                                        Right errstr
+-- What could be improved: In case of an error the full ByteString is reduced nonetheless because of
+-- the use of fold. It would be better to be able to skip the parsing when an error occurs.
+-- | Parses a row of the adjacency matrix of a graph. The consistancy of line lengths is not tested 
+--   by this function! In case of a successfull parse a 'Left [a]' is returned, otherwise a
+--   'Right ByteString' containing an error message.
+--   > 10101
+--   > 01010
+--   > 00100
+--   > 01010
+--   > 10101
+--   
+--    * whitespace in between is ignored (including '\\t', '\\n' and '\\r')
+--    * Valid Values: '0', '1'
+--    * any invalid value which is not a whitespace character raises an error
+parseAdjMat :: (Integral a) => ByteString -> Either [a] ByteString
+parseAdjMat input = B.foldr' foldf (Left []) input -- important to use *right* fold to keep ordering
+    where --foldf :: Char -> Either [a] ByteString -> Either [a] ByteString
+          foldf _ (r@(Right _)) = r
+          foldf c (l@(Left row))
+            | c == '0'  = Left (0:row)
+            | c == '1'  = Left (1:row)
+            | isSpace c = l
+            | otherwise = Right (B.pack $ "(adjacency)cannot parse '" ++ c:"'")
 
--- | Parses the attribute-Matrix
---   the matrix consists of NxM tab-delimeted double-lines like
---
---  > 1     2.3
---  > -1    2.1
---  > 4     2.7
---  > 2.2   -3e-4
---  > 3     2.3
---
---    * Valid: Doubles, Tabs (\\t)
---
+testParse :: [(a,String)] -> Maybe a
+testParse [] = Nothing
+testParse [(a,s)] = if isWhitespace s then Just a else Nothing
+testParse _  = Nothing
 
-createAttr :: T.Text -> Either [Double] T.Text
-createAttr (!input) = createAttr' (T.split (=='\t') input) (Left [])
-    where
-        createAttr' :: [T.Text] -> Either [Double] T.Text -> Either [Double] T.Text
-        createAttr' [] r     = r
-        createAttr' (a:as) r =
-                    let this = read (T.unpack a) :: Double in
-                        (if isNaN this then
-                                Right $ T.append (T.pack "cannot parse ") a
-                         else
-                           (let next = (createAttr' as r) in
-                              case next of
-                                  Left rs -> Left (this : rs)
-                                  _ -> next))
+-- What could be improved: In case of an error the full ByteString is reduced nonetheless because of
+-- the use of fold. It would be better to be able to skip the parsing when an error occurs.
+-- | Parses a row of the attribute matrix of a graph. The consistancy of line lengths is not tested 
+--   by this function! In case of a successfull parse a 'Left [a]' is returned, otherwise a
+--   'Right ByteString' containing an error message.
+--   > 1     2.3
+--   > -1    2.1
+--   > 4     2.7
+--   > 2.2   -3e-4
+--   > 3     2.3
+--
+--   * Valid: Doubles
+--   * whitespace between two values is ignored
+--   * any invalid value which is not a whitespace character raises an error
+parseAttr :: Char -> ByteString -> Either [Double] ByteString
+parseAttr delim input = parseAttr' (B.split delim input)
+    where parseAttr' :: [ByteString] -> Either [Double] ByteString
+          parseAttr' [] = Left []
+          parseAttr' (t:ts) =
+              case testParse (reads (B.unpack t) :: [(Double, String)]) of
+                   Just d -> case isNaN d of
+                                  False -> case parseAttr' ts of
+                                                Left fs   -> Left (d:fs)
+                                                Right msg -> Right msg
+                                  True  -> Right $ B.pack ("(attr)invalid value " ++ show d)
+                   _      -> Right $ B.append (B.pack "(attr)cannot parse ") t
 
-createParams :: Char -> [T.Text] -> Either Params T.Text
-createParams delim t =
-  if length t < 3 then
-     Right $ T.pack "parsing parameter file: less parameters than expected"
-  else
-    let
-        -- parse (=reads) successful if String is empty, otherwise error
-        densLine = head t
-        matchLine = head $ tail t
-        rangeLine = head $ drop 2 t
-        densR = reads (T.unpack $ densLine) :: [(Double, String)]
-        matchR = reads (T.unpack $ matchLine) :: [(Int, String)]
-    in  -- general test of input
-        if (L.length t > 3 && T.empty /= (T.concat $ drop 3 t)) then
-            Right $T.pack "parsing parameter file: more parameter lines than expected"
-        else
-            -- test density part
-            case not (L.null densR) && L.null (snd $ head densR) && not (isNaN $ fst $ head densR) of
-                True ->
-                    -- test match part 
-                    case matchR of -- parse successful
-                        [(m, "")] ->
-                            let
-                                range = parseRange $ rangeLine
-                                errors = rights range
-                            in
-                                -- test and parse range line
-                                -- some "rights" may be empty entries, they can be ignored  
-                                case T.null (T.concat errors) of
-                                    True  -> Left $ Params (fst $ head densR) m (lefts range)
-                                    False -> Right $ T.append (T.pack "parsing parameter file: cannot parse ") (T.concat errors)
-                        _ -> Right $ T.append (T.pack ("parsing parameter file: cannot parse ")) $ T.append matchLine $ T.pack "::Int"
-                False -> Right $ T.append (T.pack ("parsing parameter file: cannot parse ")) $ T.append densLine $ T.pack "::Double"
-     where
-        -- parses the line of attribute ranges
-        parseRange :: T.Text -> [Either Double T.Text]
-        parseRange t = L.map parseRange' (T.split (== delim) t)
-        -- parses each number in line seperated by 'delim'
-        parseRange' s = case reads (T.unpack s) :: [(Double, String)] of
-                             [(d,"")] -> Left d
-                             -- empty entries caused by duplicated delimiter are ignored
-                             _ -> Right (if T.null s then T.empty
-                                         else T.append (T.pack ("cannot parse ")) $ T.append s $ T.pack "::Double,")
+parseParams :: Char -> [ByteString] -> Either Params ByteString
+parseParams delim input
+  | length input /= 3 = Right $ B.pack ("(params)amount of lines does not match (expected 3, got "
+                                ++ show (length input) ++ ")")
+  | otherwise =
+    case testParse ((reads . B.unpack) (head input) :: [(Double, String)]) of -- parse density
+         Just dens -> case testParse ((reads . B.unpack) (head $ tail input) :: [(Int, String)]) of -- parse matches
+                           Just match -> case parseAttr delim (head $ tail $ tail input) of --parse range line
+                                              Left range -> Left $ Params dens match range
+                                              Right msg  -> Right $ B.append (B.pack "(param - range)") msg
+                           _        -> Right $ B.append (B.pack "(param - match)cannot parse ") (head $ tail input)
+         _         -> Right $ B.append (B.pack "(param - density)cannot parse ") (head input)
+
 
 -- | checks if a given Text is empty (Empty String, whitespaces)
-emptyLine :: T.Text -> Bool
+emptyLine :: ByteString -> Bool
 emptyLine a
-    | T.null a        = True
-    | T.all isSpace a = True
+    | B.null a        = True
+    | B.all isSpace a = True
     | otherwise       = False
 
+-- | Starts the calculation of a given DCB problem.
 doCalculation :: Adj -> Attr -> Params -> B.ByteString
 doCalculation adj attr p =
         let
@@ -191,7 +159,7 @@ doCalculation adj attr p =
 -- | gets the length of the Left a.
 --
 --   0 if Left a empty or no valid constructor.
-getLength :: Either [a] T.Text -> Int
+getLength :: Either [a] b -> Int
 getLength (Left a) = length a
 getLength (Right _) = 0
 
@@ -214,11 +182,11 @@ showHelp = do
                 exitSuccess
 
 -- | checks if the submitted Text is empty. If not it will be printed out and the program aborts
-checkError :: T.Text -> IO ()
+checkError :: ByteString -> IO ()
 checkError a
         | emptyLine a  = return ()
         | otherwise = do
-                        B.putStr $ encodeUtf8 $ T.append (T.append (T.pack "Error detected:\n") a) (T.pack "\n\n")
+                        B.putStr $ B.append (B.append (B.pack "Error detected:\n") a) (B.pack "\n\n")
                         exitFailure
 
 -- | convinience debug-function. Needs to be
@@ -228,6 +196,7 @@ debug a = return () --putStrLn a
 
 -- | The main-function to bootstrap our application
 main = do
+    timeStartProg <- getCPUTime
     args <- getArgs
     input <- case args of
             [] -> Prelude.mapM B.readFile ["sampledata.adj","sampledata.adj.atr","sampledata.p"] 
@@ -237,18 +206,19 @@ main = do
             _ -> error "Error: Wrong number of Arguments given. Try --help for more information."
 
     -- read file and clean
-    adjMat <- return $ L.filter (not . emptyLine) (T.lines (decodeUtf8 (head input)))
-    attrMat <- return $ L.filter (not . emptyLine) (T.lines (decodeUtf8 ((head . L.tail) input)))
-    paramRef <- return $ L.filter (not . emptyLine) (T.lines (decodeUtf8 ((head . L.tail . L.tail) input)))
+    adjMat <- return $ L.filter (not . emptyLine) (B.lines (head input))
+    attrMat <- return $ L.filter (not . emptyLine) (B.lines (head $ tail input))
+    paramRef <- return $ L.filter (not . emptyLine) (B.lines (head $ tail $ tail input))
+   
+
+    unrefined_graph <- return $ (L.map (parseAdjMat) adjMat)
+                                        -- +|| (parBuffer 25 rseq) --run parallel, evaluate fully
+    unrefined_attr <- return $ (L.map (parseAttr '\t') attrMat)
+                                        -- +|| (parBuffer 25 rseq) --run parallel, evaluate fully
+    paramsParsed <- return $ parseParams '\t' paramRef
     
     adjLines <- return $ length adjMat
     attrLines <- return $ length attrMat
-
-    unrefined_graph <- return $ (L.map (createGraph) adjMat)
-                                        -- +|| (parBuffer 25 rseq) --run parallel, evaluate fully
-    unrefined_attr <- return $ (L.map (createAttr) attrMat)
-                                        -- +|| (parBuffer 25 rseq) --run parallel, evaluate fully
-    paramsFinal <- return $ createParams '\t' paramRef
     adjNum <- return $ getLength (head unrefined_graph)
     attrNum <- return $ getLength (head unrefined_attr)
     debug $ show (adjLines, attrLines, attrNum)
@@ -256,33 +226,48 @@ main = do
     ----- CHECK FOR ERRORS
     ---- print out any read-errors and abort
     -- parser-errors
-    checkError $ T.intercalate (T.singleton '\n') (rights unrefined_graph)
-    checkError $ T.intercalate (T.singleton '\n') (rights unrefined_attr)
-    checkError $ either (\a -> T.empty) (\b -> b) $ paramsFinal
+    checkError $ B.intercalate (B.singleton '\n') (rights unrefined_graph)
+    checkError $ B.intercalate (B.singleton '\n') (rights unrefined_attr)
+    checkError $ either (\a -> B.empty) (\b -> b) $ paramsParsed
+    
+    paramsFinal <- return $!! case paramsParsed of Left a -> a
+    attrParams <- return $ length (range paramsFinal)
+    
     -- attribute-errors
     if adjLines /= attrLines then
-        checkError $ T.pack $ "Adjacency-Matrix size "++ show adjLines ++
-                              " differs from Attribute-Matrix " ++ show attrLines ++
+        checkError $ B.pack $ "Adjacency Matrix size "++ show adjLines ++
+                              " differs from Attribute Matrix " ++ show attrLines ++
                               ".\n"
-    else
-        return ()
+    else return ()
+    
     if adjLines /= adjNum then
-        checkError $ T.pack $ "Adjacency-Matrix is not square.\n" ++
-                              "Read format is " ++ show adjNum ++
-                              "x" ++ show attrNum ++ ".\n"
-    else
-        return ()
+        checkError $ B.pack $ "Adjacency Matrix is not square.\n" ++
+                              "Read format is " ++ show adjLines ++
+                              "x" ++ show adjNum ++ ".\n"
+    else return ()
+        
+    -- it is accaptable if the parameters file contains more attributes than the attribute matrix
+    if attrParams < attrNum then
+        checkError $ B.pack $ "Attribute Matrix format does not match Parameter.\n" ++
+                              "Attribute Matrix has " ++ show attrNum ++ " attributes.\n" ++
+                              "Parameters implicate" ++ show attrParams ++ " attributes.\n"
+    else return ()
 
     ----- EXTRACT MATRICES
-    graph <- return $ A.fromListUnboxed (Z :. adjLines :. adjLines) (L.foldl1 (++) (lefts unrefined_graph)) -- concatenated graph
+    graph <- return $!! A.fromListUnboxed (Z :. adjLines :. adjLines) (L.foldl1 (++) (lefts unrefined_graph)) -- concatenated graph
 
-    attr <- return $ A.fromListUnboxed (Z :. attrLines :. attrNum) (L.foldl1 (++) (lefts unrefined_attr)) -- concatenated attr
+    attr <- return $!! A.fromListUnboxed (Z :. attrLines :. attrNum) (L.foldl1 (++) (lefts unrefined_attr)) -- concatenated attr
+    timeEndParse <- getCPUTime
 
     ----- CALCULATE & OUTPUT
 
     --debug $ "Before: " ++ show (sumAllS graph)
-    B.putStr $ doCalculation graph attr $ (\(Left a) -> a) paramsFinal
-    
+    --timeStartCalc <- getCPUTime -- (total) CPU time is not what we need
+    calculation <- return $!! doCalculation graph attr paramsFinal
+    --timeEndCalc <- getCPUTime
+    B.putStr calculation
+    --putStrLn ("read/parse CPU time: " ++ show (fromIntegral (timeEndParse - timeStartProg) / 1000000000) ++ "ms")
+    --putStrLn ("calculation CPU time: " ++ show (fromIntegral (timeEndCalc - timeStartCalc) / 1000000000) ++ "ms")
     
 {---TIMINGS
 
