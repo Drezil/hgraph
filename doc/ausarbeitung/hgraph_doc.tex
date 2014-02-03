@@ -1,0 +1,158 @@
+\documentclass[a4paper]{scrartcl}
+\usepackage{titling}
+
+% LANGUAGE and LOCALE
+\usepackage[USenglish,ngerman]{babel} % Deutsches Wörterbuch usw.
+\newcommand{\en}[1]{\selectlanguage{USenglish}#1\selectlanguage{ngerman}}
+
+% FONT
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[babel=true]{microtype} % after babel
+\usepackage{lmodern}
+%\usepackage{times}
+\makeatletter
+\g@addto@macro\@verbatim{\microtypesetup{activate=false}}
+\makeatother
+
+% ENUMERATE and ITEMIZE
+\usepackage{enumerate}
+\usepackage{paralist}
+
+% SCIENCE and MATH
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{icomma}
+%\usepackage{units}
+\usepackage{xfrac} % Brüche im Stil von ½ (\sfrac)
+
+% PROGRAMMING
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+
+% TABLES
+%\usepackage{array}
+%\usepackage{multicol}	
+%\usepackage{dcolumn}
+%\usepackage{slashbox} % diagonale Linie in Tabellenzelle
+%\usepackage{tabularx}
+
+% LINKS and REFS
+\usepackage[obeyspaces]{url}
+\usepackage{hyperref}
+
+% BIBLIOGRAPHY
+\usepackage[style=german,german=quotes]{csquotes}
+\usepackage[style=alphabetic,backend=biber,babel=hyphen,maxbibnames=10]{biblatex}
+%\usepackage[authordate,backend=biber,babel=hyphen]{biblatex-chicago} 
+\bibliography{hgraph.bib}
+
+% FORMATING
+\usepackage{anysize} % Makros zum Einstellen der Seitenränder
+\parindent0em % Keine amerikanische Einrückung am Anfang von Paragraphen
+\clubpenalty = 10000  % Schusterungen bestrafen
+\widowpenalty = 10000 % Hurenkinder bestrafen
+\displaywidowpenalty = 10000
+
+% math commands
+\newcommand{\trans}[1]{{#1}^\intercal}
+\newcommand{\abs}[1]{\left\vert #1 \right\vert}
+\newcommand{\card}[1]{\left\vert #1 \right\vert} % cardinality
+\newcommand{\norm}[1]{\left\Vert #1 \right\Vert}
+
+\newcommand{\setR}{\mathbb{R}}
+\newcommand{\setN}{\mathbb{N}}
+
+\DeclareMathOperator*{\argmin}{\arg\min}
+\DeclareMathOperator*{\argmax}{\arg\max}
+
+\hyphenation{IEEE} % hyphenation of default language
+\begin{hyphenrules}{USenglish} % hyphenation of secondary language
+  \hyphenation{IEEE}
+\end{hyphenrules}
+
+\begin{document}
+
+\title{\en{Densely Connected Biclusters}}
+\author{Stefan Dresselhaus \and Thomas Pajenkamp}
+\date{\today} % TODO: Abgabedatum
+\newcommand{\thesemester}{Wintersemester 2013/14}
+\newcommand{\thecategory}{Programmierprojekt}
+\newcommand{\thecourse}{Parallele Algorithmen und Datenverarbeitung}
+
+
+%
+% Deckblatt
+%
+\begin{titlepage}
+  \begin{center} 
+    \mbox{}
+     \vspace{1cm}\\
+     {\Huge \textbf{\thetitle}} \\[3em]
+     {\huge \theauthor} \\[4em]
+     {\Large \thecourse}\\[1em]
+     {\Large \thecategory{} im \thesemester}\\[1em]
+     
+     \vspace{3cm}
+     
+     {\LARGE Universität Bielefeld -- Technische Fakultät}\\[2em]
+     {\large \thedate}
+  \end{center}
+\end{titlepage}
+%
+% Inhaltsverzeichnis
+%
+%\setcounter{page}{1}
+\microtypesetup{protrusion=false}
+\tableofcontents
+\microtypesetup{protrusion=true}
+
+%\newpage
+
+\section{Zielsetzung des Projekts}
+
+Im Rahmen dieses Programmierprojekts wurde ein Programm entworfen und entwickelt, um \en{Densely Connected Biclusters}, im weiteren DCB, in einem biologischen Netzwerk zu ermitteln. Bei DCB handelt es sich um Teilgraphen eines Netzwerks, dessen Knoten untereinander hoch vernetzt sind und Objekte mit ähnlichen Eigenschaften repräsentieren. \par
+Die Suche nach DCB ist ein NP-schweres Problem~\cite{Dummy}. Da mit einem geeigneten Algorithmus jedoch voneinander unabhängige Lösungspfade einzeln verfolgt werden können, ist das Problem gut für eine parallele Berechnung geeignet, wodurch die Gesamtlaufzeit stark reduziert werden kann.\par
+%TODO: Referenz NP-schwer
+
+%TODO ein bisschen biologische Motivation?
+
+\en{
+\subsection{Densely Connected Biclusters}
+}
+
+Ausgangsbasis ist ein ungerichteter ungewichteter Graph $G = (V, E)$, dessen Knoten mit $p$ Attributen versehen sind. Jedem Knoten $n$ ist zu jedem Attribut $i$ ein numerischer Wert $a_{ni}$ zugewiesen. \par
+Ein DCB $D_k = (V_k, E_k)$ ist ein Teilgraph von $G$, der durch die Paramter $\alpha \in [0, 1]$, $\delta \in \setN$ und $\omega \in \setR^p$ beschränkt wird und die folgende drei Eigenschaften erfüllt.
+\begin{itemize}
+\item Der Teilgraph ist zusammenhängend.
+\item Die Dichte des Teilgraphen unterschreitet einen Schwellenwert $\alpha$ nicht, also $\frac{2 \cdot \card{E_k}}{\card{V_k}(\card{V_k}-1)} \geq \alpha$.
+\item Für mindestens $\delta$ Attribute liegen die Werte aller Knoten des Teilgraphen höchstens $\omega_i$ auseinander. Anders ausgedrückt
+\begin{equation*}
+\delta \geq \card{\left\lbrace \sum_{k=1}^p \left(\max_n a_{nk} - \min_n a_{nk}\right) \leq \omega_{k} \right\rbrace}\text{\@.}
+\end{equation*}
+\end{itemize}
+
+\section{Wahl der Programmiersprache}
+
+Imperativ: Gefahr unerwünschter wechselseitiger Beeinflussung, Gefahr Verklemmung bei Kommunikation\\
+Funktional: Garantiert keine Nebenwirkung\\
+Haskell: Pakete zur einfachen Parallelisierung, kaum Änderung des sequentiellen Codes nötig\\
+zweischneidiges Schwert: Lazy-Evaluation $\rightarrow$ 1) nicht zu viele „Chunks” auf einmal 2) baut große Datenstrukturen, anstatt direkt zu reduzieren, wo das Gesamtergebnis immer benötigt wird (keine Parallelisierungs-Problem, muss man sich aber mit auseinandersetzen)
+
+
+\section{Der Algorithmus}
+
+Von Pseudocode rüberkopieren, eventuell anpassen an Details der Programmierung zur besseren Effizienz.
+
+
+
+\section{Ausführung und Auswertung}
+Amdahls Gesetz, Minskys Vermutung\\
+Nach jedem Erweiterungsschritt: Sammeln und Aufgaben neu verteilen $\rightarrow$ Kommunikation
+
+\section{Fazit}
+
+\newpage
+\printbibliography[heading=bibintoc]
+
+\end{document}

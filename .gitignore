@@ -10,3 +10,12 @@ dist/setup-config
 *autogen*
 dist/build/
 dist/doc/
+doc/ausarbeitung/hgraph_doc.aux
+doc/ausarbeitung/hgraph_doc.bbl
+doc/ausarbeitung/hgraph_doc.bcf
+doc/ausarbeitung/hgraph_doc.blg
+doc/ausarbeitung/hgraph_doc.log
+doc/ausarbeitung/hgraph_doc.out
+doc/ausarbeitung/hgraph_doc.run.xml
+doc/ausarbeitung/hgraph_doc.synctex.gz
+doc/ausarbeitung/hgraph_doc.toc
