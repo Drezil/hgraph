@@ -60,6 +60,8 @@
 \newcommand{\card}[1]{\left\vert #1 \right\vert} % cardinality
 \newcommand{\norm}[1]{\left\Vert #1 \right\Vert}
 
+\newcommand{\condset}[2]{\ensuremath{\left\lbrace #1\vphantom{#2}\right.\left\vert\; #2 \vphantom{#1}\right\rbrace}}
+
 \newcommand{\setR}{\mathbb{R}}
 \newcommand{\setN}{\mathbb{N}}
 
@@ -128,7 +130,7 @@ Ein DCB $D_k = (V_k, E_k)$ ist ein Teilgraph von $G$, der durch die Paramter $\a
 \item Die Dichte des Teilgraphen unterschreitet einen Schwellenwert $\alpha$ nicht, also $\frac{2 \cdot \card{E_k}}{\card{V_k}(\card{V_k}-1)} \geq \alpha$.
 \item Für mindestens $\delta$ Attribute liegen die Werte aller Knoten des Teilgraphen höchstens $\omega_i$ auseinander. Anders ausgedrückt
 \begin{equation*}
-\delta \geq \card{\left\lbrace \sum_{k=1}^p \left(\max_n a_{nk} - \min_n a_{nk}\right) \leq \omega_{k} \right\rbrace}\text{\@.}
+\delta \leq \card{\condset{1\leq k \leq p}{\omega_k \geq \left(\max_n a_{nk} - \min_n a_{nk}\right)}} \text{\@.}
 \end{equation*}
 \end{itemize}
 
@@ -137,7 +139,7 @@ Ein DCB $D_k = (V_k, E_k)$ ist ein Teilgraph von $G$, der durch die Paramter $\a
 Imperativ: Gefahr unerwünschter wechselseitiger Beeinflussung, Gefahr Verklemmung bei Kommunikation\\
 Funktional: Garantiert keine Nebenwirkung\\
 Haskell: Pakete zur einfachen Parallelisierung, kaum Änderung des sequentiellen Codes nötig\\
-zweischneidiges Schwert: Lazy-Evaluation $\rightarrow$ 1) nicht zu viele „Chunks” auf einmal 2) baut große Datenstrukturen, anstatt direkt zu reduzieren, wo das Gesamtergebnis immer benötigt wird (keine Parallelisierungs-Problem, muss man sich aber mit auseinandersetzen)
+zweischneidiges Schwert: Lazy-Evaluation $\rightarrow$ 1) nicht zu viele „Sparks” auf einmal 2) baut große Datenstrukturen, anstatt direkt zu reduzieren, wo das Gesamtergebnis immer benötigt wird (keine Parallelisierungs-Problem, muss man sich aber mit auseinandersetzen)
 
 
 \section{Der Algorithmus}
