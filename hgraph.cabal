@@ -15,7 +15,6 @@ executable hgraph
                    deepseq -any,
                    ghc -any,
                    time >=1.2,
-                   monad-par >=0.3.4,
                    parallel -any,
                    repa >=3.2,
                    transformers >=0.3.0,
@@ -40,7 +39,7 @@ test-suite test-hgraph
     build-depends: 
                    QuickCheck -any, bytestring -any, bytestring-lexing -any,
                    deepseq -any, ghc -any, time >=1.2,
-                   monad-par >=0.3.4, parallel -any, repa >=3.2,
+                   parallel -any, repa >=3.2,
                    containers >=0.5.0 && <0.6,
                    base >=4.6.0 && <4.7
     type: exitcode-stdio-1.0

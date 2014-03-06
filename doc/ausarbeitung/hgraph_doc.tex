@@ -114,8 +114,7 @@
 \section{Zielsetzung des Projekts}
 
 Im Rahmen dieses Programmierprojekts wurde ein Programm entworfen und entwickelt, um \en{Densely Connected Biclusters}, im weiteren DCB, in einem biologischen Netzwerk zu ermitteln. Bei DCB handelt es sich um Teilgraphen eines Netzwerks, dessen Knoten untereinander hoch vernetzt sind und Objekte mit ähnlichen Eigenschaften repräsentieren. \par
-Die Suche nach DCB ist ein NP-schweres Problem~\cite{Dummy}. Da mit einem geeigneten Algorithmus jedoch voneinander unabhängige Lösungspfade einzeln verfolgt werden können, ist das Problem gut für eine parallele Berechnung geeignet, wodurch die Gesamtlaufzeit stark reduziert werden kann.\par
-%TODO: Referenz NP-schwer
+Die Suche nach DCB ist ein NP-schweres Problem. Da mit einem geeigneten Algorithmus jedoch voneinander unabhängige Lösungspfade einzeln verfolgt werden können, ist das Problem gut für eine parallele Berechnung geeignet, wodurch die Gesamtlaufzeit stark reduziert werden kann. Zudem sind  real verwendete biologische Netze üblicherweise nur schwach vernetzt. Daher können durch die Forderung nach einer hohen Konnektivität der DCB viele Lösungskandidaten schnell ausgeschlossen werden und die schlimmstenfalls nichtdeterministisch polynomielle Laufzeit findet kaum Anwendung. \par
 
 %TODO ein bisschen biologische Motivation?
 
@@ -123,36 +122,43 @@ Die Suche nach DCB ist ein NP-schweres Problem~\cite{Dummy}. Da mit einem geeign
 \subsection{Densely Connected Biclusters}
 }
 
-Ausgangsbasis ist ein ungerichteter ungewichteter Graph $G = (V, E)$, dessen Knoten mit $p$ Attributen versehen sind. Jedem Knoten $n$ ist zu jedem Attribut $i$ ein numerischer Wert $a_{ni}$ zugewiesen. \par
-Ein DCB $D_k = (V_k, E_k)$ ist ein Teilgraph von $G$, der durch die Paramter $\alpha \in [0, 1]$, $\delta \in \setN$ und $\omega \in \setR^p$ beschränkt wird und die folgende drei Eigenschaften erfüllt.
+Ausgangsbasis ist ein ungerichteter ungewichteter Graph $G = (V, E)$, dessen Knoten $n \in V$ mit jeweils $p$ Attributen versehen sind. Jedem Knoten $n$ ist zu jedem Attribut $i$ ein numerischer Wert $a_{ni}$ zugewiesen. \par
+Ein DCB $D_k = (V_k, E_k)$ ist ein Teilgraph von $G$, der durch die Parameter $\alpha \in [0, 1]$, $\delta \in \setN$ und $\omega \in \setR^p$ beschränkt wird und die folgende drei Eigenschaften erfüllt.
 \begin{itemize}
 \item Der Teilgraph ist zusammenhängend.
 \item Die Dichte des Teilgraphen unterschreitet einen Schwellenwert $\alpha$ nicht, also $\frac{2 \cdot \card{E_k}}{\card{V_k}(\card{V_k}-1)} \geq \alpha$.
 \item Für mindestens $\delta$ Attribute liegen die Werte aller Knoten des Teilgraphen höchstens $\omega_i$ auseinander. Anders ausgedrückt
 \begin{equation*}
-\delta \leq \card{\condset{1\leq k \leq p}{\omega_k \geq \left(\max_n a_{nk} - \min_n a_{nk}\right)}} \text{\@.}
+\delta \leq \card{\condset{1\leq i \leq p}{\omega_k \geq \left(\max_{n\in V_k} a_{ni} - \min_{n\in V_k} a_{ni}\right)}} \text{\@.}
 \end{equation*}
 \end{itemize}
 
-\section{Wahl der Programmiersprache}
 
-Imperativ: Gefahr unerwünschter wechselseitiger Beeinflussung, Gefahr Verklemmung bei Kommunikation\\
-Funktional: Garantiert keine Nebenwirkung\\
-Haskell: Pakete zur einfachen Parallelisierung, kaum Änderung des sequentiellen Codes nötig\\
-zweischneidiges Schwert: Lazy-Evaluation $\rightarrow$ 1) nicht zu viele „Sparks” auf einmal 2) baut große Datenstrukturen, anstatt direkt zu reduzieren, wo das Gesamtergebnis immer benötigt wird (keine Parallelisierungs-Problem, muss man sich aber mit auseinandersetzen)
+\section{Wahl der Programmiersprache und Konzept der Parallelisierung}
+
+Die Wahl der Programmiersprache zur Verwirklichung des Projekts beeinflusst stark die Methoden der Programmierung und die Art der Parallelisierung. Klassischerweise werden für sequentielle und parallele Programme gleichermaßen imperative Sprachen wie C(++), Fortran oder auch Java verwendet, wofür Erweiterungen zur parallelen Programmierung existieren oder einige Werkzeuge direkt in die Sprache eingebaut sind. Bekannte Ansätze hierfür sind MPI und openMP. \par
+Unser Projekt geht in eine etwas andere Richtung. Bei imperativer Programmierung muss ein großes Augenmerk auf die Vermeidung unerwünschter wechselseitiger Beeinflussungen verschiedener Threads und Prozesse gelegt werden, die fehlerhafte Rechenergebnisse zur Folge haben. Außerdem muss bei der Thread-/Prozesskommunikation immer die Gefahr von Verklemmungen beachtet werden, die schlimmstenfalls zu einem kompletten Stillstand der Programmausführung führen. Beide Probleme sind schwierig zu detektieren und zu lokalisieren.\par
+Die genannten klassischen Probleme des Parallelrechnens können mit pur funktionaler Programmierung gut vermieden werden. Nebenwirkungen treten in pur funktionalem Programmcode (einen korrekten Compiler/Interpreter vorausgesetzt) garantiert nicht auf. Da das DCB-Problem bis auf das Einlesen der Eingabedaten und die Ausgabe pur funktional realisierbar ist, ist es optimal für eine derartige Implementierung geeignet Die konkrete Wahl der funktionalen Programmiersprache fiel auf \emph{Haskell}. \par
+\medskip
+Für Haskell wurden Bibliotheken entwickelt, die eine einfache und effiziente Programmierung paralleler Programme erlauben. Wir verwenden das Paket \emph{parallel} in Verbindung mit \emph{repa}-Arrays. Durch \emph{parallel} können geeignete Datenstrukturen automatisch in kleine Teilprobleme, auch \emph{Sparks} genannt, aufgeteilt und von freien Threads abgearbeitet werden. Die \emph{repa}-Arrays bieten Funktionen, um die einzelnen Arrayelemente parallel zu berechnen. Damit lässt sich sequentieller Programmcode einfach parallelisieren, da hierfür nur wenige Änderungen erforderlich sind. Es müssen lediglich die Berechnungsfunktionen an die parallelisierende Funktion übergeben und die Funktion zur Auswertung der Arrayelemente ausgetauscht werden. \par
+Zwei wichtige Punkte müssen dennoch beachtet werden. Zum einen verwendet Haskell das Konzept \emph{\en{Lazy Evaluation}}. Befehle werden immer nur soweit berechnet, wie sie an anderer Stelle benötigt werden. Dadurch entstehen manchmal zur Laufzeit große Bäume nur teilweise ausgewerteter Befehle, welche die Ausführungszeit stark negativ beeinflussen. Es muss demnach darauf geachtet werden, die Berechnung später ohnehin erforderlicher Funktionen zu erzwingen. Zum anderen ist die Anzahl der Sparks standardmäßig nicht begrenzt. Dadurch kann es vorkommen, dass neue Sparks schneller generiert werden, als sie abgearbeitet werden. Deshalb ist es sinnvoll, die Anzahl zeitgleich existierender Sparks im Programm zu beschränken.
 
 
 \section{Der Algorithmus}
 
-Von Pseudocode rüberkopieren, eventuell anpassen an Details der Programmierung zur besseren Effizienz.
+%TODO
+An bereits erstelltem Pseudocode orientieren, eventuell anpassen an Details der Programmierung zur besseren Effizienz.
 
 
 
 \section{Ausführung und Auswertung}
+%TODO
 Amdahls Gesetz, Minskys Vermutung\\
 Nach jedem Erweiterungsschritt: Sammeln und Aufgaben neu verteilen $\rightarrow$ Kommunikation
 
 \section{Fazit}
+%TODO
+Wir sind toll.
 
 \newpage
 \printbibliography[heading=bibintoc]

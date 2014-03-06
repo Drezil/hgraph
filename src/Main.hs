@@ -26,8 +26,8 @@ import           Util
 
 import           Control.DeepSeq
 import           Control.Exception.Base
-import           Control.Monad                  (unless)
-import           Control.Monad.Par.Scheds.Trace
+--import           Control.Monad                  (unless)
+--import           Control.Monad.Par.Scheds.Trace
 import           Control.Parallel.Strategies
 import qualified Data.Array.Repa                as A hiding ((++))
 import           Data.Array.Repa.Index

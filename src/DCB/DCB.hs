@@ -24,7 +24,7 @@ import           DCB.IO
 import           Prelude                        hiding ((++))
 import qualified Prelude                        as P ((++))
 
-import           Control.Monad.Par              
+--import           Control.Monad.Par              
 import           Control.Parallel.Strategies    hiding (parMap)
 import           Control.Monad.Identity
 import           Control.DeepSeq
