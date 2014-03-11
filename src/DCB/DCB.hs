@@ -100,15 +100,15 @@ expand adj attr d div req g@(ind,_,_) = --trace ("expanding graph "P.++ B.unpack
 --   returned as a 'Graph'.
 preprocess :: Adj           -- ^ original adjacency matrix
            -> Attr          -- ^ table of the node’s attributes
-           -> MaxDivergence -- ^  maximum allowed ranges of the node’s attribute
+           -> MaxDivergence -- ^ maximum allowed ranges of the node’s attribute
                             --   values to be considered as consistent
            -> Int           -- ^ required number of consistent attributes
            -> (Adj, [Graph])
 preprocess adj attr div req =
     let
         (Z:.nNodes:._) = A.extent adj
-        results = map (initGraph attr div req) [(i, j) | i <- [0..(nNodes-1)], j <- [(i+1)..(nNodes-1)], adj!(ix2 i j) /= 0]
-                       -- +|| (parBuffer 25 rdeepseq) 
+        ! results = map (initGraph attr div req) [(i, j) | i <- [0..(nNodes-1)], j <- [(i+1)..(nNodes-1)], adj!(ix2 i j) /= 0]
+                       +|| (parBuffer 25 rdeepseq) 
         finalGraphs = lefts results
         mask = A.fromUnboxed (A.extent adj) $V.replicate (nNodes*nNodes) False V.//
                 ((map (\(i,j) -> (i*nNodes + (mod j nNodes), True)) $rights results)
@@ -154,7 +154,6 @@ constraintInit ! attr ! div req i j =
     in if nrHit >= req then Just (fulfill, constr) else Nothing
 
 -- | removes all duplicate graphs
-
 -- nub has O(n^2) complexity.
 -- with this variant of ordNubBy we need a simple bucket-extractor (first function) obeying Ord
 -- and a second equality-check function for edge-cases (lin-search).

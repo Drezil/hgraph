@@ -1,0 +1,79 @@
+sdressel@Behemoth#51:~/hgraph$ ./hgraph bmark1haskell.N4000E80000adj bmark1haskell.N4000E80000adj.atr sampledata.p +RTS -N4 > graphs && tail -n 2 graphs 
+read/parse CPU time: 1.301769s
+calculation CPU time: 33.257483s
+
+Speedup: 3,172 (Calculation) bzw. 3,084 (Total)
+
+sdressel@Behemoth#52:~/hgraph$ ./hgraph bmark1haskell.N4000E80000adj bmark1haskell.N4000E80000adj.atr sampledata.p +RTS -N3 > graphs && tail -n 2 graphs 
+read/parse CPU time: 1.290025s
+calculation CPU time: 39.151967s
+
+Speedup: 2,694 (Calculation) bzw. 2,636 (Total)
+
+sdressel@Behemoth#53:~/hgraph$ ./hgraph bmark1haskell.N4000E80000adj bmark1haskell.N4000E80000adj.atr sampledata.p +RTS -N2 > graphs && tail -n 2 graphs 
+read/parse CPU time: 1.237298s
+calculation CPU time: 55.320123s
+
+Speedup: 1.906 (Calculation) bzw. 1,885 (Total)
+
+sdressel@Behemoth#54:~/hgraph$ ./hgraph bmark1haskell.N4000E80000adj bmark1haskell.N4000E80000adj.atr sampledata.p +RTS -N1 > graphs && tail -n 2 graphs 
+read/parse CPU time: 1.116368s
+calculation CPU time: 105.474741s
+
+Speedup: 1.00 (Referenz)
+
+
+
+sdressel@Behemoth#55:~/hgraph$ ./hgraph N2000E19990.adj N2000E19990.adj.atr sampledata.p +RTS -N1 > graphs && tail -n 2 graphs 
+read/parse CPU time: 0.231243s
+calculation CPU time: 11.984707s
+
+Speedup: 1.00 (Referenz)
+
+sdressel@Behemoth#56:~/hgraph$ ./hgraph N2000E19990.adj N2000E19990.adj.atr sampledata.p +RTS -N2 > graphs && tail -n 2 graphs 
+read/parse CPU time: 0.252726s
+calculation CPU time: 6.183972s
+
+Speedup: 1,938 (Calculation) bzw. 1,898 (Total)
+
+sdressel@Behemoth#57:~/hgraph$ ./hgraph N2000E19990.adj N2000E19990.adj.atr sampledata.p +RTS -N3 > graphs && tail -n 2 graphs 
+read/parse CPU time: 0.258124s
+calculation CPU time: 4.358235s
+
+Speedup: 2,750 (Calculation) bzw. 2,646 (Total)
+
+sdressel@Behemoth#58:~/hgraph$ ./hgraph N2000E19990.adj N2000E19990.adj.atr sampledata.p +RTS -N4 > graphs && tail -n 2 graphs 
+read/parse CPU time: 0.263308s
+calculation CPU time: 3.67729s
+
+Speedup: 3,259 (Calculation) bzw. 3,100 (Total)
+
+
+
+Best settings for Running time:
+32.95s:  +RTS -A524288 -H16777216
+33.26s:  +RTS -A524288 -H1048576
+33.28s:  +RTS -A524288 -H2097152
+33.63s:  +RTS -A524288 -H4194304
+33.83s:  +RTS -A524288 -H8388608
+Output written to : /tmp/hgraph-time-gc-space.png
+Best settings for Peak memory:
+145.00MB:  +RTS -A131072 -H1048576
+145.00MB:  +RTS -A131072 -H4194304
+145.00MB:  +RTS -A131072 -H8388608
+145.00MB:  +RTS -A131072 -H16777216
+145.00MB:  +RTS -A131072 -H33554432
+Output written to : /tmp/hgraph-peak-gc-space.png
+Best settings for Resident memory:
+47.38MB:  +RTS -A32768 -H134217728
+47.41MB:  +RTS -A32768 -H268435456
+47.64MB:  +RTS -A32768 -H536870912
+48.32MB:  +RTS -A32768 -H1073741824
+48.32MB:  +RTS -A16384 -H134217728
+Output written to : /tmp/hgraph-residency-gc-space.png
+Best settings for Residency*Time:
+1698.14MBs:  +RTS -A524288 -H16777216
+1710.71MBs:  +RTS -A524288 -H2097152
+1712.76MBs:  +RTS -A524288 -H1048576
+1729.58MBs:  +RTS -A524288 -H4194304
+1739.02MBs:  +RTS -A524288 -H8388608
