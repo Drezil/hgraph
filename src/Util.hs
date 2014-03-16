@@ -136,3 +136,15 @@ isLeft a = case a of Left _ -> True; _ -> False
 -- | Tests whether an 'Either' type is 'Right'.    
 isRight :: Either a b -> Bool
 isRight = not . isLeft
+
+-- | The 'part' function takes a predicate and a list of tuples and returns
+--   the pair of lists of left elements which do and right elements which do not satisfy the
+--   predicate, respectively; i.e.,
+--
+-- > part (\a b -> elem a b) [(1, [1, 3]), (2, [3, 4]), (0, [0, 5])] == ([1, 0], [[3, 4]])
+part :: (a -> b -> Bool) -> [(a, b)] -> ([a], [b])
+part p xs = foldr (select p) ([], []) xs
+    where
+        select :: (a -> b -> Bool) -> (a, b) -> ([a], [b]) -> ([a], [b])
+        select p (t,f) ~(ts,fs) | p t f     = (t:ts,fs)
+                                | otherwise = (ts, f:fs)

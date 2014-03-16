@@ -16,7 +16,7 @@
 -- |
 --DCB.DCB---------------------------------------------------------------------------
 
-module DCB.DCB where
+module DCB.DCB (preprocess, maxDCB, step, expand, addPoint, addablePoints, filterLayer) where
 import           Util
 import           DCB.Structures
 import           DCB.IO
@@ -39,7 +39,6 @@ import           Data.Maybe
 import qualified Data.Vector.Unboxed            as V
 import           Debug.Trace
 import qualified Data.ByteString.Char8          as B
-
 
 
 
@@ -74,7 +73,22 @@ instance (A.Shape sh, V.Unbox e) => NFData (Array A.U sh e) where
   rnf a = ()
   {-# INLINE rnf #-}
 
---TODO: Do we have to filter?
+
+-- | Calculates all maximum DCB. A maximum DCB is a densely connected bicluster that cannot be
+--   expanded by any additional node without breaking the constraints.
+--   
+--   This function does return the seed graphs themselves if they cannot be expanded.
+maxDCB :: [Graph] -> Adj -> Attr -> Density -> MaxDivergence -> Int -> [Graph]
+maxDCB [] _ _ _ _ _ = []
+maxDCB gs adj attr dens maxDiv minHit =
+    let next = L.map (expand adj attr dens maxDiv minHit) gs +|| (parBuffer 1000 rdeepseq)
+        (maximal, expandable) = part (\_ rem -> rem == []) (zip gs next)
+        expandable' = filterLayer $ concat expandable
+        -- Divide solutions into expandable solutions and maximum solutions. Expandable solutions
+        -- yield a result via the 'expand' function.
+    in maxDCB expandable' adj attr dens maxDiv minHit L.++ maximal
+    -- append maximum solutions of prospective function calls and maximum solutions of this iteration
+
 
 -- | creates a step in iteration.
 --   Basically calls expand for every Graph left in our List of interesting Graphs
@@ -83,6 +97,7 @@ step :: [Graph] -> Adj -> Attr -> Density -> MaxDivergence -> Int -> [Graph]
 step gs@((ind,_,_):_) a b c d e = traceEvent ("step from " P.++ show (A.extent ind) ) $ 
                                   filterLayer $ concat $ map (expand a b c d e ) gs
                                                         +|| (parBuffer 1000 rdeepseq)
+-- TODO: remove @((ind,_,_):_) for exhaustive pattern
                                                                  
 
 
@@ -90,9 +105,8 @@ step gs@((ind,_,_):_) a b c d e = traceEvent ("step from " P.++ show (A.extent i
 --   i.e. constraint a == Just Constraints for all returned Graphs
 expand :: Adj -> Attr -> Density -> MaxDivergence -> Int -> Graph ->  [Graph]
 expand adj attr d div req g@(ind,_,_) = --trace ("expanding graph "P.++ B.unpack (outputGraph [g])) 
-                                        catMaybes $ map
-                                                        (addPoint adj attr d div req g)
-                                                        (V.toList $ V.findIndices (==True) $ A.toUnboxed $ addablePoints adj g)
+                                        mapMaybe (addPoint adj attr d div req g)
+                                                 (V.toList $ V.findIndices (==True) $ A.toUnboxed $ addablePoints adj g)
 
 -- | Creates an adjacency matrix from the given adjacency matrix where all
 --   edges are removed whose belonging nodes cannot fulfill the passed constraints.
@@ -139,7 +153,7 @@ constraintInit :: Attr -> MaxDivergence -> Int -- ^ required number of consisten
                -> Maybe Constraints
 constraintInit ! attr ! div req i j =
     let
-        ! (Z:._:.nAttr) = A.extent attr
+        (Z:._:.nAttr) = A.extent attr
         fConstr (Z:.a:.c) =
             case c of
                     0 -> min (attr!(ix2 i a)) (attr!(ix2 j a))
@@ -198,7 +212,7 @@ updateDensity adj nodes newNode dens =
     let
         neighbourSlice = A.map (\n -> fromIntegral $adj!(A.ix2 newNode n)) nodes
         neighbours = A.foldAllS (+) (0::Int) ({- trace (show $ A.computeUnboxedS neighbourSlice)-} neighbourSlice)
-        ! (Z:.n') = A.extent nodes
+        (Z:.n') = A.extent nodes
         ! n = fromIntegral n'
         newdens = (dens * ((n)*(n-1)) / 2 + fromIntegral neighbours) * 2 / ((n+1)*(n)) 
     in newdens

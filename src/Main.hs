@@ -160,10 +160,16 @@ doCalculation adj attr p =
                 where
                         -- don't print out seeds
                         doAll [] _ _ _ _ _ = []
+                        doAll gs a b c d e = maxDCB (step gs a b c d e) a b c d e
+                        
+                {-- commented out: all solutions, not only maximum DCB
+                        -- don't print out seeds
+                        doAll [] _ _ _ _ _ = []
                         doAll gs a b c d e = doAll' (step gs a b c d e) a b c d e
                         -- but everything in the following recursive calls
                         doAll' [] _ _ _ _ _ = []
                         doAll' gs a b c d e = gs ++ doAll' (step gs a b c d e) a b c d e
+                --}
 
 -- | gets the length of the 'Left a'.
 --
