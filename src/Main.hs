@@ -26,7 +26,7 @@ import           Util
 
 import           Control.DeepSeq
 import           Control.Exception.Base
---import           Control.Monad                  (unless)
+import           Control.Monad                  (when)
 --import           Control.Monad.Par.Scheds.Trace
 import           Control.Parallel.Strategies
 import qualified Data.Array.Repa                as A hiding ((++))
@@ -188,17 +188,24 @@ getLengthV (Right _) = 0
 -- | prints the Help and exits
 showHelp :: IO ()
 showHelp = do
-                putStrLn $ "Usage: hgraph <adjacency> <attribute>\n"++
-                           "\n" ++
-                           "-h         show help\n" ++
-                           "--help\n" ++
-                           "\n" ++
-                           "adjacency  An adjecency-Matrix with 0 or 1 as weights for edges\n"++
-                           "           seperated by newlines for each row.\n"++
-                           "           Must be NxN.\n"++
+                putStrLn $ "Usage: hgraph [<tokens>]... <adjacency> <attribute> <constraints>\n"++
+                           "\nTokens:\n"++
+                           "-h, --help   show help\n"++
+                           "-t, --time   show timings at the end of output\n"++
                            "\n"++
-                           "attribute  A tabulator-seperated Matrix of attributes.\n" ++
-                           "           Must be Nxk.\n"++
+                           "adjacency    An adjecency-matrix with 0 or 1 as weights for edges\n"++
+                           "             seperated by newlines for each row.\n"++
+                           "             Must be NxN.\n"++
+                           "\n"++
+                           "attribute    A tabulator-seperated Matrix of attributes.\n"++
+                           "             The attribute lists for each node are seperated by newlines.\n"++
+                           "             Must be Nxk (k amount of attributes).\n"++
+                           "\n" ++
+                           "constraints  A properties file containing the algorithms constraints.\n"++
+                           "             First line:  required DCB density (dot-seperated decimal value).\n"++
+                           "             Second line: minimum amount of matching attributes (integer value).\n"++
+                           "             Third line:  tabulator-seperated list of attribute thresholds,\n"++
+                           "                          decimal values, must contain k entries.\n"++
                            "\n"
                 exitSuccess
 
@@ -220,18 +227,57 @@ removeCarriageReturn input =
     if B.last input == '\r' then B.init input
                             else input
 
+-- | Processes the tokens of input parameters.
+--   
+--   Valid tokens are /show time/ (@-t@, @--time@) and /display help/
+--   (@-h@, @--help@) whereby one-character tokens may be combined into
+--   a single list (@-th@).
+--   
+--   If any parameter is no token (including token lists that contain
+--   invalid tokens) that parameter and all following parameters are
+--   believed to be file paths.
+--   
+--  The returned tupel contains the existance of the /time/ token,
+--  existance of the /help/ token and all remaining file paths in that
+--  order.
+--  >>> processTokens ["--time", "-t", "foo.txt"] == (True, False, ["foo.txt"])
+--  >>> processTokens ["-tx", "--help"] == (False, False, ["-tx", "--help"])
+processTokens :: [String] -> (Bool, Bool, [FilePath])
+processTokens [] = (False, False, [])
+-- single token with prefix "--"
+processTokens x@(('-':'-':t):xs) = 
+    let (nT, nH, rem) = processTokens xs
+    in case t of
+            "help" -> (nT, True, rem)
+            "time" -> (True, nH, rem)
+            _ -> (False, False, x)
+-- list of token abbreviations with prefix "-" (e. g. "-t", "-th")
+processTokens x@(('-':t@(_:[])):xs) =
+    let --                    (valid,time,  help )
+        processTokenList "" = (True, False, False)
+        processTokenList (t:ts) = if not isValid then (False, False, False) else
+            case t of
+                't' -> (True, True, nH)
+                'h' -> (True, nT, True)
+                _   -> (False, False, False)
+            where (isValid, nT, nH) = processTokenList ts
+        (v, nT, nH) = processTokenList t  
+        (nT', nH', rem) = processTokens xs
+    in if v
+          then (nT || nT', nH || nH', rem)
+          else (False, False, x)
+processTokens x = (False, False, x)
 
 -- | The main-function to bootstrap our application
 main = do
     timeStartProg <- getCurrentTime
     args <- getArgs
-    input <- case args of
-            [] -> Prelude.mapM B.readFile ["sampledata.adj","sampledata.adj.atr","sampledata.p"] 
---            ["--help"] -> showHelp -- TODO: implement help display
---            ["-h"] -> showHelp
-            [adj, attr, params] -> Prelude.mapM B.readFile [adj, attr, params]
-            _ -> error "Error: Wrong number of Arguments given. Try --help for more information."
+    (dispTime, wantHelp, paths) <- return $ processTokens args
+    when wantHelp showHelp  -- terminates
+    input <- if length paths == 3 then Prelude.mapM B.readFile paths
+             else error "Error: Wrong number of files given. Try --help for more information."
 
+    
     -- read file and clean
     adjMat <- return $ L.map removeCarriageReturn $ L.filter (not . emptyLine) (B.lines (head input))
     attrMat <- return $ L.map removeCarriageReturn $ L.filter (not . emptyLine) (B.lines (head $ tail input))
@@ -304,8 +350,10 @@ main = do
     calculation <- return $!! doCalculation graph attr paramsFinal
     timeEndCalc <- getCurrentTime
     B.putStr calculation
-    putStrLn ("read/parse CPU time: " ++ show (diffUTCTime timeEndParse timeStartProg))
-    putStrLn ("calculation CPU time: " ++ show (diffUTCTime  timeEndCalc timeStartCalc))
+    
+    when dispTime $
+        putStrLn ("read/parse CPU time: " ++ show (diffUTCTime timeEndParse timeStartProg)
+            ++ "\ncalculation CPU time: " ++ show (diffUTCTime  timeEndCalc timeStartCalc))
     
 {---TIMINGS
 
