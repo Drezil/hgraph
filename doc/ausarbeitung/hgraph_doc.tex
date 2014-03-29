@@ -40,6 +40,7 @@
 % LINKS and REFS
 \usepackage[obeyspaces]{url}
 \usepackage{hyperref}
+\usepackage{todonotes} % todos..
 
 % BIBLIOGRAPHY
 \usepackage[style=german,german=quotes]{csquotes}
@@ -48,6 +49,39 @@
 \bibliography{hgraph.bib}
 
 % FORMATING
+\usepackage{enumitem} % nicer itemize
+\usepackage{listings}
+\usepackage{color}
+\definecolor{mygreen}{rgb}{0,0.6,0}
+\definecolor{mygray}{rgb}{0.5,0.5,0.5}
+\definecolor{mymauve}{rgb}{0.58,0,0.82}
+\lstset{ %
+  backgroundcolor=\color{white},   % choose the background color; you must add \usepackage{color} or \usepackage{xcolor}
+  basicstyle=\scriptsize,        % the size of the fonts that are used for the code
+  breakatwhitespace=false,         % sets if automatic breaks should only happen at whitespace
+  breaklines=true,                 % sets automatic line breaking
+  captionpos=b,                    % sets the caption-position to bottom
+  commentstyle=\color{mygreen},    % comment style
+  deletekeywords={...},            % if you want to delete keywords from the given language
+  escapeinside={\%*}{*)},          % if you want to add LaTeX within your code
+  extendedchars=true,              % lets you use non-ASCII characters; for 8-bits encodings only, does not work with UTF-8
+  frame=single,                    % adds a frame around the code
+  keepspaces=true,                 % keeps spaces in text, useful for keeping indentation of code (possibly needs columns=flexible)
+  keywordstyle=\color{blue},       % keyword style
+  language=Haskell,                % the language of the code
+  morekeywords={*,Graph,Adj,Attr,Density,MaxDivergence,L,expand,filterLayer,...},            % if you want to add more keywords to the set
+  numbers=left,                    % where to put the line-numbers; possible values are (none, left, right)
+  numbersep=5pt,                   % how far the line-numbers are from the code
+  numberstyle=\tiny\color{mygray}, % the style that is used for the line-numbers
+  rulecolor=\color{black},         % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
+  showspaces=false,                % show spaces everywhere adding particular underscores; it overrides 'showstringspaces'
+  showstringspaces=false,          % underline spaces within strings only
+  showtabs=false,                  % show tabs within strings adding particular underscores
+  stepnumber=1,                    % the step between two line-numbers. If it's 1, each line will be numbered
+  stringstyle=\color{mymauve},     % string literal style
+  tabsize=2,                       % sets default tabsize to 2 spaces
+  title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
+}
 \usepackage{anysize} % Makros zum Einstellen der Seitenränder
 \parindent0em % Keine amerikanische Einrückung am Anfang von Paragraphen
 \clubpenalty = 10000  % Schusterungen bestrafen
@@ -109,7 +143,8 @@
 \tableofcontents
 \microtypesetup{protrusion=true}
 
-%\newpage
+\listoftodos
+\newpage
 
 \section{Zielsetzung des Projekts}
 
@@ -121,6 +156,7 @@ Die Suche nach DCB ist ein NP-schweres Problem. Da mit einem geeigneten Algorith
 
 \en{
 \subsection{Densely Connected Biclusters}
+\label{dcb}
 }
 
 Ausgangsbasis ist ein ungerichteter ungewichteter Graph $G = (V, E)$, dessen Knoten $n \in V$ mit jeweils $p$ Attributen versehen sind. Jedem Knoten $n$ ist zu jedem Attribut $i$ ein numerischer Wert $a_{ni}$ zugewiesen. \par
@@ -148,9 +184,53 @@ Zwei wichtige Punkte müssen dennoch beachtet werden. Zum einen verwendet Haskel
 
 \section{Der Algorithmus}
 
-%TODO
-An bereits erstelltem Pseudocode orientieren, eventuell anpassen an Details der Programmierung zur besseren Effizienz.
+Der DCB-Algorithmus besteht aus einer Vorverarbeitungsphase, in der Cluster-Seeds aus 2 jeweils verbundenen Knoten generiert werden und einer anschließenden Expansion dieser Seeds unter Berücksichtigung der in \ref{dcb} vorgestellten Nebenbedingungen (Constraints). Diese Cluster (im Folgenden Graphen genannt) bestehen zu Anfang aus genau 2 Knoten, die sämtliche Bedingungen erfüllen. Eine erste Optimierung findet nun statt, da es hiernach auch Knoten geben kann, die nicht zur initialen Bildung der Graphen begetragen haben. Diese können im Folgenden komplett ausgeschlossen werden, da die einzige Bedingung, die diese nicht erfüllen konnten eine Attributs-Bedingung sein muss\footnote{Ein Graph aus 2 verbundenen Knoten ist immer maximal dicht und zusammenhängend.}. Folglich würde eine Hinzufügung dieses Knotens zu einem beliebigen Graphen diesen unweigerlich auch insgeamt gegen selbige Attributsbedingung verstossen lassen. Alle hiervon betroffenen Knoten können somit aus der Adjazienzmatrix gelöscht werden.
 
+\begin{figure}[h!]
+ \centering
+ \includegraphics[scale=0.5,keepaspectratio=true]{./img/DCB-Module.png}
+ % DCB-Module.png: 1024x512 pixel, 96dpi, 27.09x13.54 cm, bb=0 0 768 384
+ \caption{Übersicht über die Hierachie des DCB-Moduls. Gelbe Funktionen sind nach außen hin sichtbar.}
+ \label{fig:DCB-Overview}
+\end{figure}
+
+Wir exportieren 2 Funktionen nach außen, die in der Lage sind den Graphen zu expandieren: \texttt{step} und \texttt{maxDCB}. \texttt{step} expandiert alle Graphen und liefert diese - allerdings verliert man somit alle Graphen, die nicht expandiert werden konnten. Dies hat den Zweck, dass man eine gewisse mindestzahl an Knoten im Graphen hat. Da die Seeds mit 2 Knoten beginnen, man aber z.\,B. alle DCB mit 4 Knoten oder mehr haben möchte, kann man \texttt{step} so häufig aufrufen, dass alle Graphen mit weniger Knoten gar nicht zurückgegeben werden. Wir verwenden dies in unserem Algorithmus einmalig, da wir nur Cluster mit 3 oder mehr Knoten zurückliefern.\\
+\medskip
+Die Funktion maxDCB übernimmt die eigentliche Arbeit, sodass wir diese im Detail besprechen werden. Zunächst jedoch geben wir einen kleinen Überblick über die hilfs-Funktionen im Hintergrund:
+\begin{description}[style=multiline,leftmargin=2.75cm,font=\bfseries]
+ \item[filterLayer] filtert eine Menge an Graphen, indem es Duplikate herausfiltert. \\ Laufzeit: $\mathcal{O}(n \log n)$
+ \item[constraint] überprüft, ob der Graph noch die Constraints erfüllt und wenn ja, wie diese aussehen. \\ Laufzeit: $\mathcal{O}(n^2)$\todo{korrekt?}
+ \item[updateDensity] errechnet die Änderung der Dichte des Graphen anhand des hinzuzufügenden Punktes. \\ Laufzeit: $\mathcal{O}(n \cdot m)$ bei m Knoten im Ursprungsgraph
+ \item[reduceDim] ist eine interne Hilfsfunktion, die eine Dimension einer Array-Shape verwirft. \\ Laufzeit: $\mathcal{O}(1)$
+ \item[addablePoints] traversiert die Adjazienzmatrix und liefert bei gegebenem Graphen alle potentiell hinzufügbaren Knoten zurück. \\ Laufzeit: $\mathcal{O}(n \cdot m)$ bei m Knoten im Ursprungsgraphen.
+ \item[addPoint] fügt einen neuen Knoten zu einem bestehenden Graphen hinzu, indem es zunächst ein \texttt{updateDensity} macht und anschließend mittels \texttt{constraint} überprüft, ob alle Nebenbedingungen noch erfüllt sind. \\ Laufzeit: $\mathcal{O}(n^2 + n \cdot m)$, falls die Density-Constraint erfüllt blebit, $\mathcal{O}(n \cdot m)$, falls nicht.
+ \item[expand] wendet \texttt{addPoint} auf alle Ergebnisse von \texttt{addablePoints} an.
+\end{description}
+\todo[inline]{Laufzeit-Analyse ist doof ... ich überseh sicher was oder mache Fehler. Auch kann ich mit O-Notation nicht zum Ausdruck bringen, was ich eigentlich sagen wollte ... nämlich, dass der Algo zwar in n*n*n läuft, aber wir z.b. bei addPoint in n*m liegen KÖNNEN, wenn die sterne gut stehen..}
+
+\begin{lstlisting}[caption={Die maxDCB-Funktion},label=lst:maxDCB]
+-- | Calculates all maximum DCB. A maximum DCB is a densely connected bicluster that
+--   cannot be expanded by any additional node without breaking the constraints.
+--   
+--   This function does return the seed graphs themselves if they cannot be expanded.
+maxDCB :: [Graph] -> Adj -> Attr -> Density -> MaxDivergence -> Int -> [Graph]
+maxDCB [] _ _ _ _ _ = []
+maxDCB gs adj attr dens maxDiv minHit =
+    let next = L.map (expand adj attr dens maxDiv minHit) gs
+                     +|| (parBuffer 1000 rdeepseq)
+        (maximal, expandable) = part (\_ rm -> rm == []) (zip gs next)
+        expandable' = filterLayer $ concat expandable
+        -- Divide solutions into expandable solutions and maximum solutions.
+        -- Expandable solutions yield a result via the 'expand' function.
+    in maxDCB expandable' adj attr dens maxDiv minHit L.++ maximal
+    -- append maximum solutions of prospective function calls and maximum solutions
+    -- of this iteration
+\end{lstlisting}
+
+Der rekursive Funktionsaufruf findet in Zeile 14 statt. Hier werden rekursiv alle expandierbaren Möglichkeiten evaluiert und alle nicht weiter expandierbaren Graphen angehängt. In Zeile 8/9 wird die Expansion auf den Eingabegraphen \texttt{gs} parallel in einem Buffer von höchstens 1000 parallelen Anweisungen ausgeführt. Die Strategie, welche wir für die parallele Evaluation verwenden ist \texttt{rdeepseq}, was bedeutet, dass diese Graphen nachher vollständig evaluiert vorliegen und nicht (z.B. durch lazy-evaluation) nach-evaluiert werden müssen.\par
+\medskip
+Anschließend partitionieren wir die expandierten Graphen in bereits maximal Expandierte und in weiter expandierbare (Z.~10). Letztere filtern wir noch (Z.~11) nach duplikaten, um eine redundante Expansion (und damit einen erhöhten Rechenaufwand) zu vermeiden.\\
+Zurückgeliefert werden somit alle Graphen, die maximal expandiert sind.
 
 
 \section{Ausführung und Auswertung}

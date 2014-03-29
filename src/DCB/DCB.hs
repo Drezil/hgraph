@@ -16,7 +16,7 @@
 -- |
 --DCB.DCB---------------------------------------------------------------------------
 
-module DCB.DCB (preprocess, maxDCB, step, expand, addPoint, addablePoints, filterLayer) where
+module DCB.DCB (preprocess, maxDCB, step) where
 import           Util
 import           DCB.Structures
 import           DCB.IO
@@ -42,7 +42,7 @@ import qualified Data.ByteString.Char8          as B
 
 
 
-testAdj :: Adj
+{-testAdj :: Adj
 testAdj = A.fromListUnboxed (ix2 10 10) [0,1,1,1,0,0,1,0,0,1,{----}1,0,0,0,1,0,1,1,0,0,
                                          1,0,0,1,0,0,0,1,0,1,{----}1,0,1,0,1,1,1,0,0,0,
                                          0,1,0,1,0,0,1,1,0,0,{----}0,0,0,1,0,0,1,0,1,1,
@@ -66,7 +66,7 @@ testDensity = 0.7::Density;
 testReq = 3 ::Int
 
 force :: (A.Shape sh, V.Unbox e) => Array A.D sh e -> Array A.U sh e
-force a = runIdentity (A.computeP a) 
+force a = runIdentity (A.computeP a) -}
 
 --ignore A.U-Array in deepseq - already unboxed..
 instance (A.Shape sh, V.Unbox e) => NFData (Array A.U sh e) where
