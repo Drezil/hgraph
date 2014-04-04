@@ -23,7 +23,7 @@ type Adj   = Matrix A.U Int8
 --   It stores the minimum (zeroth column) and maximum (first column) value of all
 --   the 'Graph'’s nodes per attribute.
 --   The 'Vector' stores values of @1@ if the bounds are within the allowed range
---   ragarding the corresponding attribute, or @0@ if not.
+--   regarding the corresponding attribute, or @0@ if not.
 type Constraints = (Vector A.U Int, Matrix A.U Double)
 -- | A 'Vector' of weights indicating how much divergence is allowed in which dimension.
 --   Each dimension represents an attribute.
