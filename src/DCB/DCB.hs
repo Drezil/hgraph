@@ -1,11 +1,11 @@
-{-# LANGUAGE FlexibleInstances    #-}
+﻿{-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE BangPatterns #-}
 -----------------------------------------------------------------------------
 --
--- Module      :  DCB
+-- Module      :  DCB.DCB
 -- Copyright   :
 -- License     :  AllRightsReserved
 --
@@ -13,10 +13,11 @@
 -- Stability   :
 -- Portability :
 --
--- |
---DCB.DCB---------------------------------------------------------------------------
+-- | Computation of densely connected biclusters (DCB).
+-- 
+---------------------------------------------------------------------------
 
-module DCB.DCB (preprocess, maxDCB, step) where
+module DCB.DCB (preprocess, maxDCB, step, expand) where
 import           Util
 import           DCB.Structures
 import           DCB.IO
@@ -74,11 +75,18 @@ instance (A.Shape sh, V.Unbox e) => NFData (Array A.U sh e) where
   {-# INLINE rnf #-}
 
 
--- | Calculates all maximum DCB. A maximum DCB is a densely connected bicluster that cannot be
---   expanded by any additional node without breaking the constraints.
+-- | Calculates all maximum DCB for the input seed graphs. A maximum DCB is a densely
+--   connected bicluster that cannot be expanded by any additional node without breaking
+--   the constraints.
 --   
 --   This function does return the seed graphs themselves if they cannot be expanded.
-maxDCB :: [Graph] -> Adj -> Attr -> Density -> MaxDivergence -> Int -> [Graph]
+maxDCB :: [Graph]       -- ^ seed graphs
+       -> Adj           -- ^ global adjacency matrix of all nodes
+       -> Attr          -- ^ global attribute matrix
+       -> Density       -- ^ required minimum graph’s density
+       -> MaxDivergence -- ^ allowed divergence per attribute
+       -> Int           -- ^ required number of consistent attributes
+       -> [Graph]
 maxDCB [] _ _ _ _ _ = []
 maxDCB gs adj attr dens maxDiv minHit =
     let next = L.map (expand adj attr dens maxDiv minHit) gs +|| (parBuffer 1000 rdeepseq)
@@ -90,20 +98,34 @@ maxDCB gs adj attr dens maxDiv minHit =
     -- append maximum solutions of prospective function calls and maximum solutions of this iteration
 
 
--- | creates a step in iteration.
---   Basically calls expand for every Graph left in our List of interesting Graphs
---   and returns the expanded ones.
-step :: [Graph] -> Adj -> Attr -> Density -> MaxDivergence -> Int -> [Graph]
+-- | Yields all DCB that arise by adding one single node to any of the given seed graphs.
+--   
+--   Basically calls 'expand' for every input graph and returns a list of the expanded ones.
+--   Each graph only contains once within the resulting list.
+step :: [Graph]
+     -> Adj           -- ^ global adjacency matrix of all nodes
+     -> Attr          -- ^ global attribute matrix
+     -> Density       -- ^ required minimum graph’s density
+     -> MaxDivergence -- ^ allowed divergence per attribute
+     -> Int           -- ^ required number of consistent attributes
+     -> [Graph]
 step gs@((ind,_,_):_) a b c d e = traceEvent ("step from " P.++ show (A.extent ind) ) $ 
                                   filterLayer $ concat $ map (expand a b c d e ) gs
                                                         +|| (parBuffer 1000 rdeepseq)
--- TODO: remove @((ind,_,_):_) for exhaustive pattern
+-- TODO: remove @((ind,_,_):_) for exhaustive pattern, ind only needed for traceEvent
                                                                  
 
 
--- | calculates all possible additions to one Graph, yielding a list of valid expansions
---   i.e. constraint a == Just Constraints for all returned Graphs
-expand :: Adj -> Attr -> Density -> MaxDivergence -> Int -> Graph ->  [Graph]
+-- | Calculates all possible additions to one Graph, yielding a list of valid DCB
+--   that fulfill all DCB constraints.
+-- 
+expand :: Adj           -- ^ global adjacency matrix of all nodes
+       -> Attr          -- ^ global attribute matrix
+       -> Density       -- ^ required minimum graph’s density
+       -> MaxDivergence -- ^ allowed divergence per attribute
+       -> Int           -- ^ required number of consistent attributes
+       -> Graph         -- ^ graph to expand
+       ->  [Graph]
 expand adj attr d div req g@(ind,_,_) = --trace ("expanding graph "P.++ B.unpack (outputGraph [g])) 
                                         mapMaybe (addPoint adj attr d div req g)
                                                  (V.toList $ V.findIndices (==True) $ A.toUnboxed $ addablePoints adj g)
@@ -231,7 +253,7 @@ addPoint :: Adj           -- ^ global adjacency matrix of all nodes
          -> Attr          -- ^ global attribute matrix
          -> Density       -- ^ required minimum graph’s density
          -> MaxDivergence -- ^ allowed divergence per attribute
-         -> Int           -- ^ equired number of consistent attributes
+         -> Int           -- ^ required number of consistent attributes
          -> Graph         -- ^ base graph
          -> Int           -- ^ node to extend base graph by
          -> Maybe Graph

@@ -1,8 +1,8 @@
+-- | A collection of utility functions for working with functions, lists and strings.
 module Util where
 
 import           Control.Parallel.Strategies
 import qualified Data.Map as Map
-import qualified Data.Set as Set
 
 -- | Move first argument to first place (for style uniformity)
 flip1 :: (a -> b) -> (a -> b)
@@ -83,6 +83,8 @@ infixl 1 +||
 (+||) :: a -> Strategy a -> a
 a +|| b = a `using` b
 
+-- | The function 'appendS' appends the string representation of the third element
+--   to the second element followed by the first element as separator string.
 appendS :: (Show a) => String -> String -> a -> String
 appendS sep a b = (a ++ show b) ++ sep
 
@@ -106,8 +108,8 @@ remDupsBy f (l:ls) = l:(remDups' l ls)
 
 -- When removing duplicates, the first function assigns the input to a bucket,
 -- the second function checks whether it is already in the bucket (linear search).
--- | /O(n^2)/ Removes duplicate elements from a list. Performs better than
---   'Prelude.nub' by exploiting features of the 'Ord' class.
+-- | /O(n^2)./ Removes duplicate elements from a list. Performs better than
+--   'Data.List.nub' by exploiting features of the 'Ord' class.
 ordNubBy :: (Ord b) => (a -> b) -> (a -> a -> Bool) -> [a] -> [a]
 ordNubBy p f l = go Map.empty l
   where
@@ -124,14 +126,14 @@ ordNubBy p f l = go Map.empty l
     elem_by eq y (x:xs) = y `eq` x || elem_by eq y xs
 
 
--- | Returns weather a string only contains whitespace or not.
+-- | Returns whether a string only contains whitespace characters or not.
 isWhitespace :: String -> Bool
 isWhitespace "" = True
 isWhitespace (a:as) = (a `elem` " \r\n\t") && isWhitespace as
 
 -- | Tests whether an 'Either' type is 'Left'.
 isLeft :: Either a b -> Bool
-isLeft a = case a of Left _ -> True; _ -> False
+isLeft a = either (\e -> True) (\e -> False) a
 
 -- | Tests whether an 'Either' type is 'Right'.    
 isRight :: Either a b -> Bool
@@ -139,7 +141,7 @@ isRight = not . isLeft
 
 -- | The 'part' function takes a predicate and a list of tuples and returns
 --   the pair of lists of left elements which do and right elements which do not satisfy the
---   predicate, respectively; i.e.,
+--   predicate, respectively; i. e.,
 --
 -- > part (\a b -> elem a b) [(1, [1, 3]), (2, [3, 4]), (0, [0, 5])] == ([1, 0], [[3, 4]])
 part :: (a -> b -> Bool) -> [(a, b)] -> ([a], [b])

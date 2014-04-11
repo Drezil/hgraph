@@ -1,6 +1,8 @@
-{-# LANGUAGE FlexibleInstances    #-}
+﻿{-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+
+-- | Data structures used for DCB computation.
 module DCB.Structures where
 
 import           Data.Array.Repa as A hiding ((++))
@@ -19,7 +21,7 @@ type Attr  = Matrix A.U Double
 -- | Adjacency-Matrix
 type Adj   = Matrix A.U Int8
 
--- | Matrix storing the extent of a 'Graph'’s constraints fulfillment.
+-- | 'Matrix' storing the extent of a 'Graph'’s constraints fulfillment.
 --   It stores the minimum (zeroth column) and maximum (first column) value of all
 --   the 'Graph'’s nodes per attribute.
 --   The 'Vector' stores values of @1@ if the bounds are within the allowed range

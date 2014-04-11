@@ -1,5 +1,7 @@
-{-# LANGUAGE OverlappingInstances #-}
+﻿{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+
+-- | Functions to transform graphs and DCBs into text.
 module DCB.IO where
 
 import           Control.Parallel.Strategies
@@ -15,14 +17,14 @@ import           Util
 
 
 
--- | creates a default-formatted output with \",\" in between elements
---   and \"\\n\" in between dimensions
+-- | creates a default-formatted output with @,@ in between elements
+--   and @\\n@ in between dimensions
 --
 --   calls '_outputArray' with preset properties
 outputArray :: (Unbox a, Show a) => Array U DIM2 a -> B.ByteString
 outputArray a = _outputArray a "\t" "\n"
 
--- | creates a formatted output from a DIM2 repa-Array
+-- | creates a formatted output from a 'DIM2' repa-'Data.Array.Repa.Array'
 --
 --   * First String is the between-element-separator
 --
@@ -40,8 +42,8 @@ _outputArray a itt lt = B.concat $
                         | sj-1 == j = show (a!(ix2 i j))  -- no "," for last one..
                         | otherwise = show (a!(ix2 i j)) ++ itt ++ (_outputArray'' shape i (j+1) a itt)
 
--- | creates a default-formatted output with \",\" in between elements
---   and \"\\n\" in between dimensions
+-- | creates a default-formatted output with @,@ in between elements
+--   and @\\n@ in between dimensions
 --
 --   calls '_outputArray' with preset properties
 outputGraph :: [Graph] -> B.ByteString
@@ -54,7 +56,7 @@ outputGraph gs = B.concat $ L.map (flipto3 _outputGraph "," "\n") (L.sort gs)
 --
 --   * Second String is the between-dimensions-separator
 --
---   Example Output with \",\" and \"\\n\":
+--   Example Output with @,@ and @\\n@:
 --
 --   > Density: 
 --   > 0.7619047619047619

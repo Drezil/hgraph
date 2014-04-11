@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns         #-}
+﻿{-# LANGUAGE BangPatterns         #-}
 {-# LANGUAGE CPP                  #-}
 {-# LANGUAGE DoAndIfThenElse      #-}
 {-# LANGUAGE OverlappingInstances #-}
@@ -14,8 +14,66 @@
 -- Portability :
 --
 -- |
+-- Program to find densely connected biclusters (DCB) in an undirected graph.
+-- DCB are highly connected subgraphs whose nodes share similar attributes.
+-- 
+-- Each node of the source graph is linked with a table of attribute values
+-- and for a certain number of attributes all nodes of a DCB must have
+-- values within a specified range. Secondly, the density of the
+-- subgraph must not exceed a threshold.
 --
------------------------------------------------------------------------------
+-- /Using the program:/
+-- 
+-- >>> hgraph [<tokens>]... <adjacency> <attribute> <constraints>
+--
+-- The program expects 3 mandatory arguments for an input graph of size /n/:
+-- 
+--  (1) The plain text file that contains the adjacency matrix of the source
+--      graph. The file must contain /n/ rows where each row consists of
+--      exactly /n/ characters that are either @1@ if there exists an edge
+--      between two nodes or @0@ otherwise.
+--      The matrix must be symmetric.
+--  
+--  (2) The plain text file that contains the attributes linked to the nodes.
+--      It must consist of /n/ rows.
+--      Each row consists of /a/ floating point numbers separated by tab
+--      characters @\\t@ where /a/ is the number of attributes.
+--      The /b/-th value in the /v/-th row is the attribute value of the /b/-th
+--      attribute linked to the /v/-th node.
+--  
+--  (3) The plain text file that contains the algorithm’s parameters. This file
+--      contains 3 rows:
+-- 
+--       * The first row solely contains the minimum density for a DCB as floating
+--         point number
+-- 
+--       * The second row solely contains the minimum number of matching
+--         attributes for a DCB as an integer value.
+-- 
+--       * The third row contains the tolerances for each attribute as floating
+--         point values separated by tab characters @\\t@ where the /b/-th value
+--         is the tolerated range for the DCB’s node’s values of the /b/-th
+--         attribute.
+-- 
+-- Rows are separated by newline characters @\\n@ and all floating point values
+-- use dots as decimal separator.
+-- 
+-- You may prepend the mandatory parameters with certain tokens:
+--
+-- * @-h@ or @--help@ to display help (all following parameters are ignored)
+-- 
+-- * @-t@ or @--time@ to measure and display computation time
+-- 
+-- To enable multicore computation you need to append RTS options to the
+-- program call as specified in the GHC manual.
+-- 
+-- <http://www.haskell.org/ghc/docs/latest/html/users_guide/using-smp.html#parallel-options>
+--
+-- Running on 4 threads:
+-- 
+-- >>> hgraph adjacency_matrix.adj attribute_matrix.attr properties.p +RTS -N4
+--
+----------------------------------------------------------------------------
 
 module Main where
 
@@ -50,18 +108,19 @@ import           System.Environment
 import           System.Exit                    (exitFailure, exitSuccess)
 --import           Test.QuickCheck.All            (quickCheckAll)
 
-
-data Params = Params { density :: Double
-                     , matches :: Int
-                     , range   :: [Double]
+-- | All secondary parameters that must be passed to the program packed into one data type.
+data Params = Params { density :: Double -- ^ minimum density of a bicluster
+                     , matches :: Int -- ^ required amount of matching attributes
+                     , range   :: [Double] -- ^ allowed divergence for each attribute
                      } deriving (Show,Eq)
 
 instance NFData Params
 
 
--- | Parses a row of the adjacency matrix of a graph. The consistancy of line lengths is not tested 
+-- | Parses a row of the adjacency matrix of a graph. The consistency of line lengths is not tested 
 --   by this function! In case of a successfull parse a 'Left' ('Vector' a) is returned, otherwise a
---   'Right ByteString' containing an error message.
+--   'Right' 'ByteString' containing an error message.
+--   
 --   > 10101
 --   > 01010
 --   > 00100
@@ -69,6 +128,7 @@ instance NFData Params
 --   > 10101
 --   
 --    * Valid Values: @0@, @1@
+--   
 --    * any invalid value raises an error
 parseAdjMat :: (Num a, Unbox a) => ByteString -> Either (V.Vector a) ByteString
 parseAdjMat input =
@@ -77,7 +137,7 @@ parseAdjMat input =
         result = V.unfoldrN size parseAdjMat' input
     in
         if size == V.length result then Left result
-                            else Right $ B.append (B.pack "(adjecency)cannot parse ") input
+                            else Right $ B.append (B.pack "(adjacency)cannot parse ") input
   where
     --parseAdjMat' :: ByteString -> Maybe (a, ByteString)
     parseAdjMat' input =
@@ -85,26 +145,30 @@ parseAdjMat input =
         case c of
              '0' -> Just (0, B.tail input)
              '1' -> Just (1, B.tail input)
-             _   -> if isSpace c then parseAdjMat' (B.tail input)
-                                 else Nothing
+             _   -> Nothing
 
--- | Tests if a parse result is considered valid.
+-- | Tests if a parse result @(a, 'ByteString')@ is considered valid where @a@ is the parsed object
+--   and the 'ByteString' is the remaining string that could not be parsed.
 testParse :: Maybe (a, ByteString) -> Maybe a
 testParse Nothing = Nothing
 testParse (Just (a, rem)) = if emptyLine rem then Just a else Nothing
 
--- | Parses a row of the attribute matrix of a graph. The consistancy of line lengths is not tested 
---   by this function! In case of a successfull parse a 'Left [a]' is returned, otherwise a
---   'Right ByteString' containing an error message.
+-- | Parses a row of the attribute matrix of a graph. The consistency of line lengths is not tested 
+--   by this function! In case of a successfull parse a @'Left' [a]@ is returned, otherwise a
+--   @'Right' 'ByteString'@ containing the error message.
+-- 
 --   > 1     2.3
 --   > -1    2.1
 --   > 4     2.7
 --   > 2.2   -3e-4
 --   > 3     2.3
 --
---   * Valid: Doubles divided by specified delimter
+--   * Valid: 'Double's divided by specified delimter
+--   
 --   * any invalid value raises an error
-parseAttr :: Char -> ByteString -> Either [Double] ByteString
+parseAttr :: Char -- ^ delimiter
+          -> ByteString -- ^ text to parse
+          -> Either [Double] ByteString
 parseAttr delim input = parseAttr' (B.split delim input)
     where parseAttr' :: [ByteString] -> Either [Double] ByteString
           parseAttr' (row:rem) =
@@ -116,10 +180,18 @@ parseAttr delim input = parseAttr' (B.split delim input)
           parseAttr' [] = Left []
 
 -- | Parses parameter file.
---   First line: Density (Double)
---   Second line: requied matches (Int)
---   Third line is the tolerance for each attribute (Double values)
-parseParams :: Char -> [ByteString] -> Either Params ByteString
+--  
+--    * First line: 'Density'
+--   
+--    * Second line: requied matches ('Int')
+--   
+--    * Third line is the tolerance for each attribute ('Double' values), see 'parseAttr'
+--   
+--   In case of an error during the parsing a @'Right' 'ByteString'@ containing the error
+--   message is returned instead of a @'Left' 'Params'@
+parseParams :: Char -- ^delimiter
+            -> [ByteString] -- ^ text to parse
+            -> Either Params ByteString
 parseParams delim input
   | length input /= 3 = Right $ B.pack ("(params)amount of lines does not match (expected 3, got "
                                 ++ show (length input) ++ ")")
@@ -134,7 +206,7 @@ parseParams delim input
          _         -> Right $ B.append (B.pack "(param - density)cannot parse ") (head input)
 
 
--- | checks if a given Text is empty (Empty String, whitespaces)
+-- | Checks if a given text is empty (empty string, whitespaces).
 emptyLine :: ByteString -> Bool
 emptyLine a
     | B.null a        = True
@@ -171,21 +243,21 @@ doCalculation adj attr p =
                         doAll' gs a b c d e = gs ++ doAll' (step gs a b c d e) a b c d e
                 --}
 
--- | gets the length of the 'Left a'.
+-- | Gets the length of the @'Left' [a]@.
 --
---   @0@ if Left a empty or no valid constructor.
+--   @0@ if @[a]@ in @Left [a]@ is empty or it is a 'Right' value.
 getLength :: Either [a] b -> Int
 getLength (Left a) = length a
 getLength (Right _) = 0
 
--- | gets the length of the Left ('Vector a').
+-- | Gets the length of the @'Left' ('Vector' v)@.
 --
---   @0@ if Left a empty or no valid constructor.
+--   @0@ if @a@ in 'Left a' is empty or it is a 'Right' value.
 getLengthV :: (Unbox a) => Either (V.Vector a) b -> Int
 getLengthV (Left a) = V.length a
 getLengthV (Right _) = 0
 
--- | prints the Help and exits
+-- | Prints the help and exits.
 showHelp :: IO ()
 showHelp = do
                 putStrLn $ "Usage: hgraph [<tokens>]... <adjacency> <attribute> <constraints>\n"++
@@ -209,7 +281,7 @@ showHelp = do
                            "\n"
                 exitSuccess
 
--- | checks if the submitted Text is empty. If not it will be printed out and the program aborts
+-- | Checks if the submitted text is empty. If not it will be printed out and the program aborts.
 checkError :: ByteString -> IO ()
 checkError a
         | emptyLine a  = return ()
@@ -221,7 +293,7 @@ checkError a
 --   changed to return () to disable Debug.
 debug a = return () --putStrLn a
 
--- | Removes one trailing carriage return character @\\r@ if existant.
+-- | Removes one trailing carriage return character @\\r@ if existent.
 removeCarriageReturn :: ByteString -> ByteString
 removeCarriageReturn input =
     if B.last input == '\r' then B.init input
@@ -237,11 +309,12 @@ removeCarriageReturn input =
 --   invalid tokens) that parameter and all following parameters are
 --   believed to be file paths.
 --   
---  The returned tupel contains the existance of the /time/ token,
---  existance of the /help/ token and all remaining file paths in that
---  order.
---  >>> processTokens ["--time", "-t", "foo.txt"] == (True, False, ["foo.txt"])
---  >>> processTokens ["-tx", "--help"] == (False, False, ["-tx", "--help"])
+--   The returned tupel contains the existance of the /time/ token,
+--   existance of the /help/ token and all remaining file paths in that
+--   order.
+--
+--   >>> processTokens ["--time", "-t", "foo.txt"] == (True, False, ["foo.txt"])
+--   >>> processTokens ["-tx", "--help"] == (False, False, ["-tx", "--help"])
 processTokens :: [String] -> (Bool, Bool, [FilePath])
 processTokens [] = (False, False, [])
 -- single token with prefix "--"
@@ -310,20 +383,20 @@ main = do
     if adjLines /= attrLines then
         checkError $ B.pack $ "Adjacency Matrix size "++ show adjLines ++
                               " differs from Attribute Matrix " ++ show attrLines ++
-                              ".\n"
+                              "."
     else return ()
     
     if adjLines /= adjNum then
         checkError $ B.pack $ "Adjacency Matrix is not square.\n" ++
                               "Read format is " ++ show adjLines ++
-                              "x" ++ show adjNum ++ ".\n"
+                              "x" ++ show adjNum ++ "."
     else return ()
         
     -- it is accaptable if the parameters file contains more attributes than the attribute matrix
     if attrParams < attrNum then
         checkError $ B.pack $ "Attribute Matrix format does not match Parameter.\n" ++
                               "Attribute Matrix has " ++ show attrNum ++ " attributes.\n" ++
-                              "Parameters implicate" ++ show attrParams ++ " attributes.\n"
+                              "Parameters implicate " ++ show attrParams ++ " attributes."
     else return ()
 
     ----- EXTRACT MATRICES
