@@ -234,13 +234,61 @@ Anschließend partitionieren wir die expandierten Graphen in maximal erweiterte 
 
 
 \section{Ausführung und Auswertung}
-%TODO
-Amdahls Gesetz, Minskys Vermutung\\
-Nach jedem Erweiterungsschritt: Sammeln und Aufgaben neu verteilen $\rightarrow$ Kommunikation
+Im folgenden Abschnitt gehen wir genauer auf die verwendeten Compileroptionen und den durchgeführten Benchmark ein, sowie eine Auswertung der dadurch angefallenen Daten.
+\subsection{Compileroptionen}
+Als Compileroptionen sind in der mitgelieferten .cabal-Datei folgende Angaben eingestellt:\par
+\texttt{ghc-options: -Odph -rtsopts -threaded -fno-liberate-case -funfolding-use-threshold1000 -funfolding-keeness-factor1000 -optlo-O3 -fllvm}
+Hierbei stehen die einzelnen Flags für
+\begin{description}[style=multiline,leftmargin=6.5cm,font=\ttfamily\bfseries]
+ \item[-Odph] maximale GHC-Optimierung
+ \item[-rtsopts] Runtime-Optionen (+RTS -Nx -l -s etc.)
+ \item[-threaded] Multithreading
+ \item[-fno-liberate-case] Code-duplizierung jenseits von -O2 vermeiden
+ \item[-funfolding-use-threshold1000] Analogon zu \texttt{\#pragma unroll 1000} in C++, wo möglich.
+ \item[-funfolding-keeness-factor1000] empfohlen für besseres Unfolding
+ \item[-fllvm] Auf llvm kompilieren statt direkt Maschienencode zu erzeugen
+ \item[-optlo-O3] llvm-Compiler mit -O3 starten
+\end{description}
+Insbesondere das Unfolding der Funktionen und das Weiterreichen des Codes an LLVM bringt einen extremen Performance-Zugewinn. LLVM kann hier auf die jeweils benutzte Architektur weiter optimiren.
+
+\subsection{Garbage-Collector-Optimierung}
+TODO\todo{machen!}
+
+\subsection{Laufzeit und Amdahls Gesetz}
+\begin{figure}[h!]
+ \centering
+ \includegraphics[scale=0.75,keepaspectratio=true]{./img/CPUvsAmdahl.png}
+ % DCB-Module.png: 1024x512 pixel, 96dpi, 27.09x13.54 cm, bb=0 0 768 384
+ \caption{Graphische Darstellung der Benchmark-Auswertung. Dieser Benchmark wurde auf einer 4-Kern-Maschiene (i7-2600) gemacht, sodass die Laufzeit bei 4 Kernen nicht optimal ist, da durch Hintergrundaufgaben ca. 5\% CPU-Last auf einem Kern lasteten.}
+ \label{fig:Benchmark}
+\end{figure}
+
+Wir haben den Test mit einer bereigestellten 4000x4000-Matrix (sparse, 80000 Einträge) insgesamt 10x für jede Konfiguration (1,2,3 oder 4 Kerne) durchrechnen lassen. Dies ist in Abbildung \ref{fig:Benchmark} zu sehen. Die Varianz war mit $< 0.003s$ zu gering um sinnvoll eingezeichnet zu werden. Wir haben das Programm in 2 Teile unterteilt. Zum einen das Einlesen, welches Single-Threaded jeweils $0.9447\pm2e-5 s$ im Single-Threaded und $\approx 1.05s$ im Multithreading-Fall benötigt hat. Bei einer Single-Thread-Laufzeit von $44.6581\pm2.30e-2 s$ für den Rest des Programms, ergibt sich nach Amdahl die in Tabelle \ref{tab:Amdahl} Minimallaufzeit für das gesamte Programm.
+
+\begin{table}
+\caption{Speedup nach Amdahl und tatsächliche Messung}
+\centering
+ \begin{tabular}[h!]{l||r|r}
+  Kerne & Speedup & Erreicht \\
+  \hline
+  \hline
+   1 & 1 & 1 \\
+   2 & 1.959 & 1.965 \\
+   3 & 2.878 & 2.839 \\
+   4 & 3.761 & 3.629
+ \end{tabular}
+ \label{tab:Amdahl}
+\end{table}
+
+Man muss hierbei berücksichtigen, dass Amdahl Effekte, wie Supralinearität nicht berücksichtigt, welche in der Realität zwar auftreten können, aber nicht müssen. Dies fällt bei uns im Fall von 2 Kernen auf, wo wir leicht über der Schätzung nach Amdahl liegen.\par
+\medskip
+Insgesamt lässt sich hierbei sehen, dass wir fast immer gleichauf mit Amdahls Gesetzt liegen und somit im ideal zu erwartenden Bereich der Parallelisierung.
+
 
 \section{Fazit}
-%TODO
-Wir sind toll.
+
+Noch optimierbar: GC-Nutzung (Threadscope hat einschnitte)
+Nicht optimierbar: Wechsel zwischen den Generationen
 
 \newpage
 \printbibliography[heading=bibintoc]
