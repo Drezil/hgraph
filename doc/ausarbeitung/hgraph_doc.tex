@@ -184,6 +184,7 @@ Zwei wichtige Punkte müssen dennoch beachtet werden. Zum einen verwendet Haskel
 
 \section{Der Algorithmus}
 
+Für die Darstellung des Eingabegraphen, in dem die DCB gesucht werden, verwenden wir eine Adjazenzmatrix. Die anschließende Laufzeitbetrachtung bezieht sich auf diese Datenstruktur. \par
 Der DCB-Algorithmus besteht aus einer Vorverarbeitungsphase, in der Cluster-Seeds aus 2 jeweils verbundenen Knoten generiert werden, und einer anschließenden Expansion dieser Seeds unter Berücksichtigung der in Abschnitt~\ref{dcb} vorgestellten Nebenbedingungen (Constraints). Diese Cluster (im Folgenden Graphen genannt) bestehen zu Anfang aus genau 2 Knoten, die sämtliche Bedingungen erfüllen. Eine erste Optimierung findet nun statt, da es nach diesem Schritt auch verbundene Knoten geben kann, die nicht zur initialen Bildung der Graphen beigetragen haben. Diese Paare können im Folgenden komplett ausgeschlossen werden, da sie die Attributsbedingung nicht erfüllen können\footnote{Ein Graph aus 2 verbundenen Knoten ist immer maximal dicht und zusammenhängend.}. Folglich würde jeder Graph mit diesem Knotenpaar insgesamt auch gegen selbige Attributsbedingung verstoßen. Alle hiervon betroffenen Kanten können somit aus der Adjazenzmatrix gelöscht werden.\par
 
 \begin{figure}[h!]
@@ -198,7 +199,7 @@ Wir exportieren 2 Funktionen nach außen, die in der Lage sind, den Graphen zu e
 \medskip
 Die Funktion \texttt{maxDCB} übernimmt die eigentliche Berechnung, sodass wir diese im Detail besprechen. Zunächst jedoch geben wir einen kleinen Überblick über die Hilfsfunktionen im Hintergrund:
 \begin{description}[style=multiline,leftmargin=2.75cm,font=\bfseries]
- \item[filterLayer] filtert eine Menge von $n$ Graphen, indem es Duplikate herausfiltert. \\ Laufzeit: $\mathcal{O}(n \log n)$.
+ \item[filterLayer] filtert eine Menge von $s$ Graphen der Größe $m$, indem es Duplikate herausfiltert. \\ Laufzeit: $\mathcal{O}(m \cdot s \log s)$.
  \item[constraint] überprüft, ob der Graph noch die Constraints erfüllt und wenn ja, wie diese aussehen. \\ Laufzeit: $\mathcal{O}(k)$ bei $k$ Attributen, da die Maximal- und Minimalwerte des Graphen tabelliert werden.
  \item[updateDensity] errechnet die Änderung der Dichte des Graphen anhand des hinzuzufügenden Punktes. \\ Laufzeit: $\mathcal{O}(m)$ bei $m$ Knoten im Ursprungsgraph, da die Graphendichten gespeichert werden.
  \item[reduceDim] ist eine interne Hilfsfunktion, die eine Dimension einer Array-Shape verwirft. \\ Laufzeit: $\mathcal{O}(1)$.
@@ -231,7 +232,8 @@ maxDCB gs adj attr dens maxDiv minHit =
 Der rekursive Funktionsaufruf findet in Zeile~14 statt. Hier werden iterativ alle expandierbaren Möglichkeiten evaluiert bis sie maximal erweitert sind und an die nicht erweiterbaren Graphen angehängt. In den Zeilen~8/9 wird die Expansion auf den Eingabegraphen \texttt{gs} parallel in einem Puffer von höchstens 1000 parallelen Anweisungen ausgeführt. Die Strategie, welche wir für die parallele Evaluation verwenden, lautet \texttt{rdeepseq}. Dadurch werden diese Graphen direkt vollständig ausgewertet und müssen nicht (z.\,B. durch Lazy Evaluation) nachberechnet werden.\par
 \medskip
 Anschließend partitionieren wir die expandierten Graphen in maximal erweiterte und in weiter expandierbare (Z.~10). Letztere filtern wir noch (Z.~11) nach Duplikaten, um redundante Weiterberechnung (und damit einen erhöhten Rechenaufwand) zu vermeiden. Zurückgeliefert werden somit alle Graphen, die maximal expandiert sind. \par
-
+\medskip
+Die Funktion \texttt{expand} wird letztendlich für jeden Graphen genau einmal aufgerufen. Der Rechenaufwand der $m$-ten Expansionsstufe mit $s$ Graphen ist zusammen mit der Filterung doppelter Graphen $\mathcal{O}(s m \cdot (n (k+m)+ \log s))$, für schwach vernetzte Eingabegraphen eher $\mathcal{O}(s m \cdot (n k + \log s))$. $k$ ist die Anzahl an Attributen und $n$ die Größe der Adjazenzmatrix. Allerdings wächst die Anzahl der Graphen pro Iteration im ungünstigsten Fall exponentiell an, woraus sich die Schwierigkeit des Problem als NP-schwer ergibt. In schwach vernetzten Eingabegraphen ist jedoch zu erwarten, dass die anfänglichen Seed-Graphen kaum erweiterbar sind, wodurch sich der gesamte Rechenaufwand stark reduziert. Dennoch besteht viel Potential zur Parallelisierung der Berechnung zur Verkürzung der Rechenzeit.
 
 \section{Ausführung und Auswertung}
 Im folgenden Abschnitt gehen wir genauer auf die verwendeten Compileroptionen und den durchgeführten Benchmark ein, sowie eine Auswertung der dadurch angefallenen Daten.
