@@ -1,79 +1,220 @@
-sdressel@Behemoth#51:~/hgraph$ ./hgraph bmark1haskell.N4000E80000adj bmark1haskell.N4000E80000adj.atr sampledata.p +RTS -N4 > graphs && tail -n 2 graphs 
-read/parse CPU time: 1.301769s
-calculation CPU time: 33.257483s
-
-Speedup: 3,172 (Calculation) bzw. 3,084 (Total)
-
-sdressel@Behemoth#52:~/hgraph$ ./hgraph bmark1haskell.N4000E80000adj bmark1haskell.N4000E80000adj.atr sampledata.p +RTS -N3 > graphs && tail -n 2 graphs 
-read/parse CPU time: 1.290025s
-calculation CPU time: 39.151967s
-
-Speedup: 2,694 (Calculation) bzw. 2,636 (Total)
-
-sdressel@Behemoth#53:~/hgraph$ ./hgraph bmark1haskell.N4000E80000adj bmark1haskell.N4000E80000adj.atr sampledata.p +RTS -N2 > graphs && tail -n 2 graphs 
-read/parse CPU time: 1.237298s
-calculation CPU time: 55.320123s
-
-Speedup: 1.906 (Calculation) bzw. 1,885 (Total)
-
-sdressel@Behemoth#54:~/hgraph$ ./hgraph bmark1haskell.N4000E80000adj bmark1haskell.N4000E80000adj.atr sampledata.p +RTS -N1 > graphs && tail -n 2 graphs 
-read/parse CPU time: 1.116368s
-calculation CPU time: 105.474741s
-
-Speedup: 1.00 (Referenz)
+read/parse CPU time: 0.952664s
+calculation CPU time: 44.762225s
 
 
 
-sdressel@Behemoth#55:~/hgraph$ ./hgraph N2000E19990.adj N2000E19990.adj.atr sampledata.p +RTS -N1 > graphs && tail -n 2 graphs 
-read/parse CPU time: 0.231243s
-calculation CPU time: 11.984707s
-
-Speedup: 1.00 (Referenz)
-
-sdressel@Behemoth#56:~/hgraph$ ./hgraph N2000E19990.adj N2000E19990.adj.atr sampledata.p +RTS -N2 > graphs && tail -n 2 graphs 
-read/parse CPU time: 0.252726s
-calculation CPU time: 6.183972s
-
-Speedup: 1,938 (Calculation) bzw. 1,898 (Total)
-
-sdressel@Behemoth#57:~/hgraph$ ./hgraph N2000E19990.adj N2000E19990.adj.atr sampledata.p +RTS -N3 > graphs && tail -n 2 graphs 
-read/parse CPU time: 0.258124s
-calculation CPU time: 4.358235s
-
-Speedup: 2,750 (Calculation) bzw. 2,646 (Total)
-
-sdressel@Behemoth#58:~/hgraph$ ./hgraph N2000E19990.adj N2000E19990.adj.atr sampledata.p +RTS -N4 > graphs && tail -n 2 graphs 
-read/parse CPU time: 0.263308s
-calculation CPU time: 3.67729s
-
-Speedup: 3,259 (Calculation) bzw. 3,100 (Total)
+read/parse CPU time: 1.024055s
+calculation CPU time: 22.767218s
 
 
 
-Best settings for Running time:
-32.95s:  +RTS -A524288 -H16777216
-33.26s:  +RTS -A524288 -H1048576
-33.28s:  +RTS -A524288 -H2097152
-33.63s:  +RTS -A524288 -H4194304
-33.83s:  +RTS -A524288 -H8388608
-Output written to : /tmp/hgraph-time-gc-space.png
-Best settings for Peak memory:
-145.00MB:  +RTS -A131072 -H1048576
-145.00MB:  +RTS -A131072 -H4194304
-145.00MB:  +RTS -A131072 -H8388608
-145.00MB:  +RTS -A131072 -H16777216
-145.00MB:  +RTS -A131072 -H33554432
-Output written to : /tmp/hgraph-peak-gc-space.png
-Best settings for Resident memory:
-47.38MB:  +RTS -A32768 -H134217728
-47.41MB:  +RTS -A32768 -H268435456
-47.64MB:  +RTS -A32768 -H536870912
-48.32MB:  +RTS -A32768 -H1073741824
-48.32MB:  +RTS -A16384 -H134217728
-Output written to : /tmp/hgraph-residency-gc-space.png
-Best settings for Residency*Time:
-1698.14MBs:  +RTS -A524288 -H16777216
-1710.71MBs:  +RTS -A524288 -H2097152
-1712.76MBs:  +RTS -A524288 -H1048576
-1729.58MBs:  +RTS -A524288 -H4194304
-1739.02MBs:  +RTS -A524288 -H8388608
+read/parse CPU time: 1.047577s
+calculation CPU time: 15.704609s
+
+
+
+read/parse CPU time: 1.062051s
+calculation CPU time: 12.332524s
+
+
+
+run 1:
+
+read/parse CPU time: 0.953791s
+calculation CPU time: 44.718198s
+
+
+
+read/parse CPU time: 1.035345s
+calculation CPU time: 22.746795s
+
+
+
+read/parse CPU time: 1.04245s
+calculation CPU time: 15.78701s
+
+
+
+read/parse CPU time: 1.055099s
+calculation CPU time: 12.222074s
+
+
+
+run 2:
+
+read/parse CPU time: 0.942925s
+calculation CPU time: 44.73844s
+
+
+
+read/parse CPU time: 1.035007s
+calculation CPU time: 22.618661s
+
+
+
+read/parse CPU time: 1.049929s
+calculation CPU time: 15.709723s
+
+
+
+read/parse CPU time: 1.05919s
+calculation CPU time: 12.396189s
+
+
+
+run 3:
+
+read/parse CPU time: 0.942149s
+calculation CPU time: 44.830076s
+
+
+
+read/parse CPU time: 1.024761s
+calculation CPU time: 22.659221s
+
+
+
+read/parse CPU time: 1.056063s
+calculation CPU time: 15.648887s
+
+
+
+read/parse CPU time: 1.046301s
+calculation CPU time: 12.273803s
+
+
+
+run 4:
+
+read/parse CPU time: 0.9452s
+calculation CPU time: 44.457549s
+
+
+
+read/parse CPU time: 1.024195s
+calculation CPU time: 22.749959s
+
+
+
+read/parse CPU time: 1.047347s
+calculation CPU time: 15.734104s
+
+
+
+read/parse CPU time: 1.048153s
+calculation CPU time: 12.30159s
+
+
+
+run 5:
+
+read/parse CPU time: 0.941752s
+calculation CPU time: 44.425132s
+
+
+
+read/parse CPU time: 1.017611s
+calculation CPU time: 22.722588s
+
+
+
+read/parse CPU time: 1.04292s
+calculation CPU time: 15.780035s
+
+
+
+read/parse CPU time: 1.0771s
+calculation CPU time: 12.313876s
+
+
+
+run 6:
+
+read/parse CPU time: 0.939709s
+calculation CPU time: 44.50896s
+
+
+
+read/parse CPU time: 1.018977s
+calculation CPU time: 22.729477s
+
+
+
+read/parse CPU time: 1.054371s
+calculation CPU time: 15.752404s
+
+
+
+read/parse CPU time: 1.058106s
+calculation CPU time: 12.304072s
+
+
+
+run 7:
+
+read/parse CPU time: 0.942869s
+calculation CPU time: 44.713013s
+
+
+
+read/parse CPU time: 1.031298s
+calculation CPU time: 22.710467s
+
+
+
+read/parse CPU time: 1.033033s
+calculation CPU time: 15.778901s
+
+
+
+read/parse CPU time: 1.059634s
+calculation CPU time: 12.341658s
+
+
+
+run 8:
+
+read/parse CPU time: 0.947452s
+calculation CPU time: 44.836405s
+
+
+
+read/parse CPU time: 1.032148s
+calculation CPU time: 22.77166s
+
+
+
+read/parse CPU time: 1.053393s
+calculation CPU time: 15.69297s
+
+
+
+read/parse CPU time: 1.044597s
+calculation CPU time: 12.317066s
+
+
+
+run 9:
+
+read/parse CPU time: 0.938255s
+calculation CPU time: 44.590507s
+
+
+
+read/parse CPU time: 1.024785s
+calculation CPU time: 22.817768s
+
+
+
+read/parse CPU time: 1.052206s
+calculation CPU time: 15.734595s
+
+
+
+read/parse CPU time: 1.050041s
+calculation CPU time: 12.24279s
+
+
+
+run 10:
+
