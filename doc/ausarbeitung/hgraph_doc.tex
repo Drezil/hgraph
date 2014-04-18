@@ -198,8 +198,8 @@ Wir exportieren 2 Funktionen nach außen, die in der Lage sind, den Graphen zu e
 \medskip
 Die Funktion \texttt{maxDCB} übernimmt die eigentliche Berechnung, sodass wir diese im Detail besprechen. Zunächst jedoch geben wir einen kleinen Überblick über die Hilfsfunktionen im Hintergrund:
 \begin{description}[style=multiline,leftmargin=2.75cm,font=\bfseries]
- \item[filterLayer] filtert eine Menge von $n$ Graphen, indem es Duplikate herausfiltert. \\ Laufzeit: $\mathcal{O}(n \log n)$. \todo{ist da mit drin, dass der Vergleich zweier Graphen nicht in O(1) geht?}
- \item[constraint] überprüft, ob der Graph noch die Constraints erfüllt und wenn ja, wie diese aussehen. \\ Laufzeit: $\mathcal{O}(k)$ bei $k$ Attributen, da die Maximal- und Minimalwerte des Graphen tabelliert werden.\todo{korrekt? jetzt ja}
+ \item[filterLayer] filtert eine Menge von $n$ Graphen, indem es Duplikate herausfiltert. \\ Laufzeit: $\mathcal{O}(n \log n)$.
+ \item[constraint] überprüft, ob der Graph noch die Constraints erfüllt und wenn ja, wie diese aussehen. \\ Laufzeit: $\mathcal{O}(k)$ bei $k$ Attributen, da die Maximal- und Minimalwerte des Graphen tabelliert werden.
  \item[updateDensity] errechnet die Änderung der Dichte des Graphen anhand des hinzuzufügenden Punktes. \\ Laufzeit: $\mathcal{O}(m)$ bei $m$ Knoten im Ursprungsgraph, da die Graphendichten gespeichert werden.
  \item[reduceDim] ist eine interne Hilfsfunktion, die eine Dimension einer Array-Shape verwirft. \\ Laufzeit: $\mathcal{O}(1)$.
  \item[addablePoints] traversiert die Adjazenzmatrix und liefert alle mit einem Graphen verbundenen Knoten, die nicht selbst im Graphen enthalten sind. \\ Laufzeit: $\mathcal{O}(n \cdot m)$ bei $m$ Knoten im Ursprungsgraphen und einer Adjazenzmatrix $n\times n$.
@@ -208,8 +208,6 @@ Die Funktion \texttt{maxDCB} übernimmt die eigentliche Berechnung, sodass wir d
  Laufzeit: $\mathcal{O}(n \cdot m \cdot (k + m))$ im worst-case einer voll besetzten Adjazenzmatrix. In der Praxis sind die Eingabegraphen kaum vernetzt und die Attributzahl $k$ ist klein, sodass sich die average-case-Laufzeit unter Berücksichtigung der alternativen Laufzeit von \texttt{addPoint} an $\mathcal{O}(n \cdot m \cdot k) \approx \mathcal{O}(n \cdot m)$ annähert.
  
 \end{description}
-\todo[inline]{Laufzeit-Analyse ist doof ... ich überseh sicher was oder mache Fehler. Auch kann ich mit O-Notation nicht zum Ausdruck bringen, was ich eigentlich sagen wollte ... nämlich, dass der Algo zwar in n*n*n läuft, aber wir z.b. bei addPoint in n*m liegen KÖNNEN, wenn die sterne gut stehen..\\
-Ich denke, das wird jetzt klar :-)}
 
 \begin{lstlisting}[caption={Die maxDCB-Funktion},label=lst:maxDCB]
 -- | Calculates all maximum DCB. A maximum DCB is a densely connected bicluster that
