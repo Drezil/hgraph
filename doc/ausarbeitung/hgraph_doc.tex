@@ -177,9 +177,9 @@ Die Wahl der Programmiersprache zur Verwirklichung des Projekts beeinflusst star
 Unser Projekt geht in eine etwas andere Richtung. Bei imperativer Programmierung muss ein großes Augenmerk auf die Vermeidung unerwünschter wechselseitiger Beeinflussungen verschiedener Threads und Prozesse gelegt werden, die fehlerhafte Rechenergebnisse zur Folge haben. Außerdem muss bei der Thread-/Prozesskommunikation immer die Gefahr von Verklemmungen beachtet werden, die schlimmstenfalls zu einem kompletten Stillstand der Programmausführung führen. Beide Probleme sind schwierig zu detektieren und zu lokalisieren.\par
 Die genannten klassischen Probleme des Parallelrechnens können mit pur funktionaler Programmierung gut vermieden werden. Nebenbedingungen treten in pur funktionalem Programmcode (einen korrekten Compiler/Interpreter vorausgesetzt) garantiert nicht auf. Da das DCB-Problem bis auf das Einlesen der Eingabedaten und die Ausgabe pur funktional realisierbar ist, ist es optimal für eine derartige Implementierung geeignet Die konkrete Wahl der funktionalen Programmiersprache fiel auf \emph{Haskell}. \par
 \medskip
-Für Haskell wurden Bibliotheken entwickelt, die eine einfache und effiziente Programmierung paralleler Programme erlauben. Wir verwenden das Paket \emph{parallel} in Verbindung mit \emph{repa}-Arrays. Durch \emph{parallel} können geeignete Algorithmen mit wenig Aufwand, aufgeteilt werden. Dabei werden Funktionsaufrufe unevaluiert in einem Array gespeichert und dort von freien Threads abgearbeitet. Diese Technik nennt man Work-Stealing und die noch nicht ausgewerteten Funktionen werden in Haskell \emph{Sparks} genannt. Man kann sich dies als einen auf den Funktionsaufruf beschränkten light-weight Thread vorstellen -- mit weniger Overhead. Die \emph{repa}-Arrays bieten Funktionen, um die einzelnen Elemente eines Arrays parallel zu berechnen. Mit diesen Techniken lässt sich sequentieller Programmcode einfach parallelisieren, da hierfür nur wenige Änderungen im Programmcode erforderlich sind. Es müssen lediglich die Berechnungsfunktionen an die parallelisierende Funktion übergeben und die Funktion zur Auswertung der Arrayelemente ausgetauscht werden. \par
+Für Haskell wurden Bibliotheken entwickelt, die eine einfache und effiziente Programmierung paralleler Programme erlauben. Wir verwenden das Paket \emph{parallel} in Verbindung mit \emph{repa}-Arrays. Durch \emph{parallel} können geeignete Algorithmen mit wenig Aufwand, aufgeteilt werden. Dabei werden Funktionsaufrufe unevaluiert in einem Array gespeichert und dort von freien Threads abgearbeitet. Diese Technik nennt man Work-Stealing und die noch nicht ausgewerteten Funktionen werden in Haskell \emph{Sparks} genannt. Man kann sich dies als einen auf den Funktionsaufruf beschränkten light-weight-Thread vorstellen -- mit weniger Overhead. Die \emph{repa}-Arrays bieten Funktionen, um die einzelnen Elemente eines Arrays parallel zu berechnen. Mit diesen Techniken lässt sich sequentieller Programmcode einfach parallelisieren, da hierfür nur wenige Änderungen im Programmcode erforderlich sind. Es müssen lediglich die Berechnungsfunktionen an die parallelisierende Funktion übergeben und die Funktion zur Auswertung der Arrayelemente ausgetauscht werden. \par
 \medskip
-Zwei wichtige Punkte müssen dennoch beachtet werden. Zum einen verwendet Haskell das Konzept \emph{\en{Lazy Evaluation}}. Befehle werden immer nur soweit berechnet, wie sie an anderer Stelle benötigt werden. Dadurch entstehen manchmal zur Laufzeit große Bäume nur teilweise ausgewerteter Befehle, welche die Ausführungszeit durch eine hohe Garbage-Collector-Auslastung stark negativ beeinflussen. Es muss demnach darauf geachtet werden, die Berechnung später ohnehin erforderlicher Funktionen frühzeitig zu erzwingen. Zum anderen ist die Anzahl der Sparks standardmäßig nicht begrenzt, sodass auch hier zu große Arrays entstehen können, deren Abarbeitung allerdings im Verlaufe des Programms durch o.\,g. Lazy Evaluation evtl.\ gar nicht erforderlich ist. Daher beschränken wir die Anzahl der möglichen Sparks (und somit der maximal möglichen Worker-Threads) auf 1000. Erwähnenswert ist noch, dass diese Technik \emph{nicht} von Hyper-Threading profitiert,da kein Kontextwechsel der Threads nötig ist, und wir somit 1000 \glqq echte\grqq \ Kerne für eine maximale Auslastung benötigen. Die obere Grenze wird eher durch Amdahls Gesetz, denn durch die verfügbaren Kerne beschränkt.\par
+Zwei wichtige Punkte müssen dennoch beachtet werden. Zum einen verwendet Haskell das Konzept \emph{\en{Lazy Evaluation}}. Befehle werden immer nur soweit berechnet, wie sie an anderer Stelle benötigt werden. Dadurch entstehen manchmal zur Laufzeit große Bäume nur teilweise ausgewerteter Befehle, welche die Ausführungszeit durch eine hohe Garbage-Collector-Auslastung stark negativ beeinflussen. Es muss demnach darauf geachtet werden, die Berechnung später ohnehin erforderlicher Werte frühzeitig zu erzwingen. Zum anderen ist die Anzahl der Sparks standardmäßig nicht begrenzt, sodass auch hier zu große Arrays entstehen können, deren Abarbeitung allerdings im Verlaufe des Programms durch o.\,g. Lazy Evaluation evtl.\ gar nicht erforderlich ist. Daher beschränken wir die Anzahl der möglichen Sparks, und somit der maximal möglichen Worker-Threads, auf 1000. Erwähnenswert ist noch, dass diese Technik \emph{nicht} von Hyper-Threading profitiert,da kein Kontextwechsel der Threads nötig ist, und wir somit 1000 \glqq echte\grqq \ Kerne für eine maximale Auslastung benötigen. Die obere Grenze wird eher durch Amdahls Gesetz, denn durch die verfügbaren Kerne beschränkt.\par
 
 
 \section{Der Algorithmus}
@@ -195,7 +195,7 @@ Der DCB-Algorithmus besteht aus einer Vorverarbeitungsphase, in der Cluster-Seed
  \label{fig:DCB-Overview}
 \end{figure}
 
-Wir exportieren 2 Funktionen nach außen, die in der Lage sind, den Graphen zu expandieren: \texttt{step} und \texttt{maxDCB}. \texttt{step} liefert alle möglichen expandierten Graphen aus einer Liste von bestehenden DCB -- allerdings verliert man somit alle Graphen, die nicht expandiert werden konnten. Als Ergebnis hat man eine gewisse Mindestzahl an Knoten im Graphen. Da die Seeds mit 2 Knoten beginnen, man aber z.\,B. alle DCB mit 4 Knoten oder mehr haben möchte, kann man \texttt{step} so häufig aufrufen, dass alle Graphen mit weniger Knoten gar nicht zurückgegeben werden. Wir verwenden dies in unserem Algorithmus einmalig, da wir nur Cluster mit 3 oder mehr Knoten zurückliefern.\par
+Wir exportieren 2 Funktionen nach außen, die in der Lage sind, die Graphen zu expandieren: \texttt{step} und \texttt{maxDCB}. \texttt{step} liefert alle möglichen expandierten Graphen aus einer Liste von bestehenden DCB -- allerdings verliert man somit alle Graphen, die nicht expandiert werden konnten. Als Ergebnis hat man eine gewisse Mindestzahl an Knoten im Graphen. Da die Seeds mit 2 Knoten beginnen, man aber z.\,B. alle DCB mit 4 Knoten oder mehr haben möchte, kann man \texttt{step} so häufig aufrufen, dass alle Graphen mit weniger Knoten gar nicht zurückgegeben werden. Wir verwenden dies in unserem Algorithmus einmalig, da wir nur Cluster mit 3 oder mehr Knoten zurückliefern.\par
 \medskip
 Die Funktion \texttt{maxDCB} übernimmt die eigentliche Berechnung, sodass wir diese im Detail besprechen. Zunächst jedoch geben wir einen kleinen Überblick über die Hilfsfunktionen im Hintergrund:
 \begin{description}[style=multiline,leftmargin=2.75cm,font=\bfseries]
@@ -233,39 +233,40 @@ Der rekursive Funktionsaufruf findet in Zeile~14 statt. Hier werden iterativ all
 \medskip
 Anschließend partitionieren wir die expandierten Graphen in maximal erweiterte und in weiter expandierbare (Z.~10). Letztere filtern wir noch (Z.~11) nach Duplikaten, um redundante Weiterberechnung (und damit einen erhöhten Rechenaufwand) zu vermeiden. Zurückgeliefert werden somit alle Graphen, die maximal expandiert sind. \par
 \medskip
-Die Funktion \texttt{expand} wird letztendlich für jeden Graphen genau einmal aufgerufen. Der Rechenaufwand der $m$-ten Expansionsstufe mit $s$ Graphen ist zusammen mit der Filterung doppelter Graphen $\mathcal{O}(s m \cdot (n (k+m)+ \log s))$, für schwach vernetzte Eingabegraphen eher $\mathcal{O}(s m \cdot (n k + \log s))$. $k$ ist die Anzahl an Attributen und $n$ die Größe der Adjazenzmatrix. Allerdings wächst die Anzahl der Graphen pro Iteration im ungünstigsten Fall exponentiell an, woraus sich die Schwierigkeit des Problem als NP-schwer ergibt. In schwach vernetzten Eingabegraphen ist jedoch zu erwarten, dass die anfänglichen Seed-Graphen kaum erweiterbar sind, wodurch sich der gesamte Rechenaufwand stark reduziert. Dennoch besteht viel Potential zur Parallelisierung der Berechnung zur Verkürzung der Rechenzeit.
+Die Funktion \texttt{expand} wird letztendlich für jeden Graphen genau einmal aufgerufen. Der Rechenaufwand der $m$-ten Expansionsstufe mit $s$ Graphen ist zusammen mit der Filterung doppelter Graphen $\mathcal{O}(s m \cdot (n (k+m)+ \log s))$, für schwach vernetzte Eingabegraphen eher $\mathcal{O}(s m \cdot (n k + \log s))$. $k$ ist die Anzahl an Attributen und $n$ die Größe der Adjazenzmatrix. Allerdings wächst die Anzahl der Graphen pro Iteration im ungünstigsten Fall exponentiell an, woraus sich die Schwierigkeit des Problem als NP-schwer ergibt. In schwach vernetzten Eingabegraphen ist jedoch zu erwarten, dass die anfänglichen Seeds kaum erweiterbar sind, wodurch sich der gesamte Rechenaufwand stark reduziert. Dennoch besteht viel Potential zur Parallelisierung der Berechnung zur Verkürzung der Rechenzeit.
 
 \section{Ausführung und Auswertung}
 Im folgenden Abschnitt gehen wir genauer auf die verwendeten Compileroptionen und den durchgeführten Benchmark ein, sowie eine Auswertung der dadurch angefallenen Daten.
 \subsection{Compileroptionen}
-Als Compileroptionen sind in der mitgelieferten .cabal-Datei folgende Angaben eingestellt:\par
-\texttt{ghc-options: -Odph -rtsopts -threaded -fno-liberate-case -funfolding-use-threshold1000 -funfolding-keeness-factor1000 -optlo-O3 -fllvm}
-Hierbei stehen die einzelnen Flags für
+Als Compileroptionen sind in der mitgelieferten \texttt{.cabal}-Datei folgende Angaben eingestellt:\par
+\texttt{ghc-options: -Odph -rtsopts -threaded -fno-liberate-case -funfolding-use-threshold1000 -funfolding-keeness-factor1000 -optlo-O3 -fllvm}.
+Hierbei stehen die einzelnen Flags für:
 \begin{description}[style=multiline,leftmargin=6.5cm,font=\ttfamily\bfseries]
- \item[-Odph] maximale GHC-Optimierung
- \item[-rtsopts] Runtime-Optionen (+RTS -Nx -l -s etc.)
- \item[-threaded] Multithreading
- \item[-fno-liberate-case] Code-duplizierung jenseits von -O2 vermeiden
- \item[-funfolding-use-threshold1000] Analogon zu \texttt{\#pragma unroll 1000} in C++, wo möglich.
- \item[-funfolding-keeness-factor1000] empfohlen für besseres Unfolding
- \item[-fllvm] Auf llvm kompilieren statt direkt Maschienencode zu erzeugen
- \item[-optlo-O3] llvm-Compiler mit -O3 starten
+ \item[-Odph] maximale GHC-Optimierung,
+ \item[-rtsopts] Runtime-Optionen (+RTS -Nx -l -s etc.),
+ \item[-threaded] Multithreading,
+ \item[-fno-liberate-case] Code-Duplizierung jenseits von \texttt{-O2} vermeiden,
+ \item[-funfolding-use-threshold1000] Analogon zu \texttt{\#pragma unroll 1000} in C++ wo möglich,
+ \item[-funfolding-keeness-factor1000] empfohlen für besseres Unfolding,
+ \item[-fllvm] auf llvm kompilieren, statt direkt Maschienencode zu erzeugen,
+ \item[-optlo-O3] llvm-Compiler mit \texttt{-O3} starten.
 \end{description}
-Insbesondere das Unfolding der Funktionen und das Weiterreichen des Codes an LLVM bringt einen extremen Performance-Zugewinn. LLVM kann hier auf die jeweils benutzte Architektur weiter optimiren.
+Insbesondere das Unfolding der Funktionen und das Weiterreichen des Codes an LLVM bringt einen starken Performance-Zugewinn. LLVM kann hier auf die jeweils benutzte Architektur weiter optimieren.
 
 \subsection{Garbage-Collector-Optimierung}
 TODO\todo{machen!}
 
-\subsection{Laufzeit und Amdahls Gesetz}
+\subsection{Laufzeit und Amdahls Gesetz} \label{test}
 \begin{figure}[h!]
  \centering
  \includegraphics[scale=0.75,keepaspectratio=true]{./img/CPUvsAmdahl.png}
  % DCB-Module.png: 1024x512 pixel, 96dpi, 27.09x13.54 cm, bb=0 0 768 384
- \caption{Graphische Darstellung der Benchmark-Auswertung. Dieser Benchmark wurde auf einer 4-Kern-Maschiene (i7-2600) gemacht, sodass die Laufzeit bei 4 Kernen nicht optimal ist, da durch Hintergrundaufgaben ca. 5\% CPU-Last auf einem Kern lasteten.}
+ \caption{Graphische Darstellung der Benchmark-Auswertung. Dieser Benchmark wurde auf einer 4-Kern-Maschine (i7-2600) gemacht, sodass die Laufzeit bei 4 Kernen nicht optimal ist, da durch Hintergrundaufgaben ca.\ 5\,\% CPU-Last auf einem Kern liegen.}
  \label{fig:Benchmark}
 \end{figure}
 
-Wir haben den Test mit einer bereigestellten 4000x4000-Matrix (sparse, 80000 Einträge) insgesamt 10x für jede Konfiguration (1,2,3 oder 4 Kerne) durchrechnen lassen. Dies ist in Abbildung \ref{fig:Benchmark} zu sehen. Die Varianz war mit $< 0.003s$ zu gering um sinnvoll eingezeichnet zu werden. Wir haben das Programm in 2 Teile unterteilt. Zum einen das Einlesen, welches Single-Threaded jeweils $0.9447\pm2e-5 s$ im Single-Threaded und $\approx 1.05s$ im Multithreading-Fall benötigt hat. Bei einer Single-Thread-Laufzeit von $44.6581\pm2.30e-2 s$ für den Rest des Programms, ergibt sich nach Amdahl die in Tabelle \ref{tab:Amdahl} Minimallaufzeit für das gesamte Programm.
+Wir haben den Test mit einer bereitgestellten $4000\times 4000$-Adjazenzmatrix (spärlich besetzt, 80000 Einträge) insgesamt $10\times$ für jede Konfiguration (1, 2, 3 oder 4 Kerne) durchrechnen lassen. Dies ist in Abbildung~\ref{fig:Benchmark} zu sehen. Die Varianz war mit $< 0,003\,s$ zu gering um sinnvoll eingezeichnet zu werden. \par
+Wir haben das Programm in zwei Teile unterteilt. Zum einen das Einlesen, welches Single-Threaded jeweils $0,9447\pm2e{-5}\,s$ und $\approx 1,05\,s$ im Multi-Threaded-Fall benötigte. Bei einer Single-Threaded-Laufzeit von $44,6581\pm2,30e{-2}\,s$ für den Rest des Programms ergibt sich nach Amdahl die in Tabelle~\ref{tab:Amdahl} angegebene Minimallaufzeit für das gesamte Programm.
 
 \begin{table}
 \caption{Speedup nach Amdahl und tatsächliche Messung}
@@ -274,25 +275,28 @@ Wir haben den Test mit einer bereigestellten 4000x4000-Matrix (sparse, 80000 Ein
   Kerne & Speedup & Erreicht \\
   \hline
   \hline
-   1 & 1 & 1 \\
-   2 & 1.959 & 1.965 \\
-   3 & 2.878 & 2.839 \\
-   4 & 3.761 & 3.629
+   1 & 1,000& 1,000 \\
+   2 & 1,959 & 1,965 \\
+   3 & 2,878 & 2,839 \\
+   4 & 3,761 & 3,629
  \end{tabular}
  \label{tab:Amdahl}
 \end{table}
 
-Man muss hierbei berücksichtigen, dass Amdahl Effekte, wie Supralinearität nicht berücksichtigt, welche in der Realität zwar auftreten können, aber nicht müssen. Dies fällt bei uns im Fall von 2 Kernen auf, wo wir leicht über der Schätzung nach Amdahl liegen.\par
+Man muss hierbei berücksichtigen, dass das Amdahlsche Gesetz positive Effekte, wie Superlinearität, nicht berücksichtigt. Diese können zwar auftreten, tun es aber in der Realität selten. Im Fall von 2 Kernen ist unser ermittelter Speedup leicht schneller als nach Amdahl möglich, was vermutlich auf Ungenauigkeiten der Messungen und unterschiedliches Vorgehen des Programms bei mehreren Rechenkernen zurückzuführen ist.\par
 \medskip
 Insgesamt lässt sich hierbei sehen, dass wir fast immer gleichauf mit Amdahls Gesetzt liegen und somit im ideal zu erwartenden Bereich der Parallelisierung.
 
 
 \section{Fazit}
 
-Noch optimierbar: GC-Nutzung (Threadscope hat einschnitte)
-Nicht optimierbar: Wechsel zwischen den Generationen
+Die Versuche aus Abschnitt~\ref{test} belegen, dass der Algorithmus gut parallelisierbar ist und unser Programm nahezu optimal die Teilaufgaben auf die verfügbaren Ressourcen aufteilt. Für eine Berechnung auf noch mehr Rechenkernen ist zu erwarten, dass der Speedup zusätzlich durch Kommunikation leicht reduziert wird, da nach jedem Erweiterungsschritt die Teilergebnisse gesammelt werden müssen und nach doppelten Graphen gefiltert wird. Allerdings kommt uns dabei die Parallelisierung über \emph{Sparks} zugute, da durch die kleinen Teilaufgaben die Berechnungen gut aufgeteilt werden können und kein Prozess im Leerlauf auf die Synchronisation warten muss. \par
+\medskip
+Ein Detail, das die Rechenzeit negativ beeinflusst, ist Haskells Garbage-Collector. Dieser läuft zwar parallel, während auf anderen Kernen zum Teil weitergerechnet wird, blockiert jedoch selbstverständlich einen Kern für diese Zeit. Durch Angaben initialer Heap- und Stackgröße beim Programmstart lässt sich die Zeit des Garbage-Collectors um einige Sekunden reduzieren. Die optimalen Initialwerte sind stark von der Größe und den Werten der Eingabeparameter abhängig, sodass genaue Werte in der Praxis gemessen werden müssten, was den Aufwand nicht lohnt. Große Initialwerte beeinflussen die Laufzeit natürlich nicht negativ.\par
+\medskip
+Eine parallelen Berechnung auf sehr vielen Rechenkernen bringt wie beschrieben einen sehr guten erwarteten Speedup, verglichen mit dem Amdahlschen Gesetz. Daher ist grundsätzlich auch eine GPU-beschleunigte Berechnung denkbar. Diese würde mutmaßlich den Speedup stark erhöhen, man müsste wegen des begrenzten Grafikspeichers allerdings den exponentiellen Speicherbedarf beachten.
 
-\newpage
-\printbibliography[heading=bibintoc]
+%\newpage
+%\printbibliography[heading=bibintoc]
 
 \end{document}
