@@ -5,7 +5,6 @@
 *.lkshf
 
 /.dist-buildwrapper
-dist/setup-config
 .project*
 *autogen*
 dist/build/
@@ -19,3 +18,12 @@ doc/ausarbeitung/hgraph_doc.out
 doc/ausarbeitung/hgraph_doc.run.xml
 doc/ausarbeitung/hgraph_doc.synctex.gz
 doc/ausarbeitung/hgraph_doc.toc
+dist
+cabal-dev
+*.chi
+*.chs.h
+.virtualenv
+.hsenv
+.cabal-sandbox/
+cabal.sandbox.config
+cabal.config
